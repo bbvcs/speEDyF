@@ -1,0 +1,176 @@
+import os
+import datetime
+import itertools
+
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+
+import pyedflib
+
+from utils.custom_print import print
+from utils.overlap_resolution import OverlapType, check_time_overlap, check_channel_overlap, resolve_overlap
+from utils.resampling import all_header_indicated_sample_rates
+
+
+
+def edf_collate(root):
+
+    VERBOSE = True  # TODO make param
+
+    edf_files = []
+    bad_files = []
+
+    # collect edf files under root directory
+    for path, subdirs, files in os.walk(root):
+        for file in files:
+            if file.split(".")[-1].lower() in ["edf", "edf+", "bdf", "bdf+"]:
+                edf_files.append(os.path.join(path, file))
+
+    # read headers and store in dict of filepath -> header
+    edf_headers = {}
+    for file in edf_files:
+        try:
+            edf_headers[file] = pyedflib.highlevel.read_edf_header(file)#, read_annotations=False)
+        except OSError as e:
+            print(f"\tCould not read {file} ({e})", enabled=VERBOSE)
+            bad_files.append(file)
+
+    for file in bad_files:
+        edf_files.remove(file)
+
+    # sort edf_files by start date
+    edf_files = sorted(edf_files, key=lambda x: edf_headers[x]["startdate"])
+
+    # use headers/signalheaders to pick a sample rate
+    edf_sample_rate = all_header_indicated_sample_rates(edf_headers)[0]
+    # TODO resampling
+
+    # using headers, construct matrix of which channels present in which files
+    edf_channels_dict = {file: header["channels"] for file, header in edf_headers.items()}
+    edf_channels_superset = sorted(set.union(*map(set, edf_channels_dict.values())))
+    edf_channels_ndarray = np.zeros(shape=(len(edf_channels_superset), len(edf_files)), dtype=np.int8)
+    for i, file in enumerate(edf_files):
+        for j, channel in enumerate(edf_channels_superset):
+            # if the channel is present in this file, set corresponding matrix pos to 1
+            if channel in edf_headers[file]["channels"]:
+                edf_channels_ndarray[j, i] = 1
+    edf_channels_mtx = pd.DataFrame(edf_channels_ndarray, index=edf_channels_superset, columns=edf_files, dtype=np.int8)
+
+    # for each channel, get the number of files it appears in
+    edf_channels_counts = {channel:np.sum(edf_channels_mtx.loc[channel]) for channel in edf_channels_superset}
+    min_channel_count = len(edf_files) * 0.75
+    excluded_channels = [channel for channel, count in edf_channels_counts.items() if count < min_channel_count]
+    if len(excluded_channels) > 0:
+        print("Channels {} will be excluded, as they are in less than 75% of {} files (counts {}, 75% thresh: {})".format(
+                excluded_channels, len(edf_files),
+                [edf_channels_counts[channel] for channel in excluded_channels], min_channel_count),
+            enabled=VERBOSE)
+    # TODO exclude (set to NaN in collation matrix)
+
+    # using headers, collect start/end times for each file
+    edf_intervals = {}
+    for file in edf_files:
+        start = edf_headers[file]["startdate"]
+        end = start + datetime.timedelta(seconds=edf_headers[file]["Duration"])
+
+        edf_intervals[file] = (start, end)
+
+    # get list of tuples containing (file, (start, end))
+    zipped_intervals = list(zip(edf_intervals.keys(), edf_intervals.values()))
+
+    # get every unique pair of intervals
+    combinations = list(itertools.combinations(zipped_intervals, 2))
+
+    # list of overlap resolution
+    # resolution_mtx = pd.DataFrame(columns=["channel", "file_A", "file_B",
+    #                                        "file_A_start",	"file_A_end", "file_A_length",
+    #                                        "file_B_start",	"file_B_end", "file_B_length",
+    #                                        "overlap_start",	"overlap_end", "overlap_length", "overlap_type",
+    #                                        "common_channels",	"action", "data_loss"])
+    resolution_mtx_entries = []
+
+
+    overlapping_pair_count = 0
+    for pair in combinations:
+        file_a = pair[0]
+        file_b = pair[1]
+
+        file_a_start = file_a[1][0]
+        file_a_end = file_a[1][1]
+        file_b_start = file_b[1][0]
+        file_b_end = file_b[1][1]
+
+        file_a_path = file_a[0]
+        file_b_path = file_b[0]
+
+        file_a_header = edf_headers[file_a_path]
+        file_b_header = edf_headers[file_b_path]
+
+        # firstly, do they overlap in time?
+        overlap_type, overlap_period = check_time_overlap(file_a_start, file_a_end, file_b_start, file_b_end)
+
+        if overlap_type != OverlapType.NO_OVERLAP:
+            print(str(overlap_type), enabled=VERBOSE)
+
+            # OK, but do they have the same channels?
+            #   > if not, no problem; there isn't any overlap.
+            #     - this can be the case with concurrent EDF files representing different groups of channels
+            #   > if so, potentially big problem - but is the data in these overlapping channels the same?
+            #     - if so, less of a problem. depending on overlap_type, we can resolve in different ways
+            #        > essentially, leaving the data in would be OK; same data at same time, even if overwrite no change
+            #     - if not, how can we know which to keep? some potential solutions:
+            #        - allow visual inspection of overlapping data in both files, let user decide which to keep
+            #           - slow, problematic if overlap period long
+            #           - letting the user do this manually with EDF visualisation
+            #           - this was approach of EDFProcessor, not going to try that this time.
+            #        - try to determine which channel has more "information"
+            #           - e.g maybe one channel is essentially 0, or compelte noise, whereas anbother is valid EDF
+            #           * might give this a go, but not sure how to approach
+            #           - problem is, what if both data seems valid?
+            #        * omit the data that is overlapping in *both* files
+            #           - essentially, if both data looks valid, how can we know which is true? even with inspection
+            #           - in any case, the overlapping period may be so small (couple sec) that this is most sensible
+
+            channel_check_results = check_channel_overlap(file_a_header, file_b_header)
+            if len(channel_check_results) != 0:  # if there are common channels
+                resolve_overlap(overlapping_pair_count, resolution_mtx_entries, edf_sample_rate, channel_check_results,
+                                file_a_path, file_a_header,
+                                file_b_path, file_b_header,
+                                overlap_type, overlap_period)
+
+                overlapping_pair_count += 1
+
+    resolution_mtx = pd.DataFrame([entry.as_dict() for entry in resolution_mtx_entries])
+
+    # set up lists that we will use to hold the information for a "collation matrix"
+    # this matrix will contain information on how the files are organised in a "bigger picture sense"
+    # order of files, how much data should be read from each file (perhaps we omit some data), size of gaps beween files
+    # this could be used, for example, to construct one big collated edf of all files
+    # this matrix will have, for each file:
+    #   - its index in theoretical collated file (order)
+    #   - where (individual samples) this file starts/ends in the theoretical collated
+    #   - the actual length of the rows in this file
+    #   - where we read from within this file (usually 0 -> length of rows, but could change if we omit due to overlap)
+    collation_mtx_struct = {
+        "orders": [],
+        "starts": [],
+        "ends": [],
+        "lengths": [],
+        "channels": {}  # channel: (start, end)
+    }
+
+    return
+
+if __name__ == "__main__":
+    # TODO: add argparse library, pass in root/out
+    #root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909/test_overlap_3"
+    #root = "/home/bcsm/Desktop/895" # partial, non-identical (real)
+    # root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909/test_overlap_partial_nonidentical" # simulated
+    root = "/home/bcsm/Desktop/865" # many partial identical
+
+
+    # dir to save results for this run i.e matrix, overlap resolutions
+    out = "909"
+
+    edf_collate(root)
