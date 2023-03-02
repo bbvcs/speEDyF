@@ -22,7 +22,13 @@ def header_indicated_sample_rate(edf_header):
 
 
 def all_header_indicated_sample_rates(edf_headers):
-    """Return a list of all the unique header-indicated sample rates across all files, ordered by frequency"""
+    """
+    Returns:
+      - a list of all the unique header-indicated sample rates across all files, ordered by frequency
+      - a minimum cutoff sample rate (1 std below mean), where values below are outliers
+        - this is to remove weird files with very low (e.g 1hz) sample rates
+      - the list of files determined as outliers based upon this cutoff
+    """
 
     edf_sample_rates = {}
     for file, header in edf_headers.items():
@@ -32,4 +38,9 @@ def all_header_indicated_sample_rates(edf_headers):
     sorted_indexes = np.argsort(frequency)[::-1]
     sorted_by_freq = unique_sample_rates[sorted_indexes]
 
-    return sorted_by_freq
+    # remove any files where the most frequent sample rate is below our min_cutoff
+    values = list(edf_sample_rates.values())
+    sr_cutoff = np.mean(values) - np.std(values)
+    outliers = [file for file, most_frequenct_sr in edf_sample_rates.items() if most_frequenct_sr < sr_cutoff]
+
+    return sorted_by_freq, sr_cutoff, outliers

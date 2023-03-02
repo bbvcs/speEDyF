@@ -17,6 +17,8 @@
 # Major things left TODO
     # RESAMPLING!
         # needs to be done before any overlap resolution!
+    # so far, only removed files where MOST FREQUENT SR IS OUTLIER
+        # files with 1 or 2 channels with a weird sampel rate will remain.
 
 # Analysis
     # mne-python

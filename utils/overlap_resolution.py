@@ -487,6 +487,7 @@ def interval_plot(interval_list):
 
     fig, ax = plt.subplots()
 
+
     for i in range(0, len(interval_list)):
         start = interval_list[i][0]
         end = interval_list[i][1]
