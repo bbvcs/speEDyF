@@ -4,13 +4,12 @@ import itertools
 import math
 
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 
 import pyedflib
 
 from utils.custom_print import print
-from utils.overlap_resolution import OverlapType, check_time_overlap, check_channel_overlap, resolve_overlap, resolve_overlap2, interval_plot
+from edf_resolve_overlaps import OverlapType, check_time_overlap, check_channel_overlap, resolve_overlap2
 from utils.resampling import all_header_indicated_sample_rates
 
 
@@ -267,10 +266,10 @@ def edf_collate(root, out):
     edf_channels_superset = sorted(set.union(*map(set, edf_channels_dict.values())))
     edf_channels_ndarray = np.zeros(shape=(len(edf_channels_superset), len(edf_files)), dtype=np.int8)
     for i, file in enumerate(edf_files):
-        for collation_dict, channel_label in enumerate(edf_channels_superset):
+        for logicol_channel_intervals, channel_label in enumerate(edf_channels_superset):
             # if the channel is present in this file, set corresponding matrix pos to 1
             if channel_label in edf_headers[file]["channels"]:
-                edf_channels_ndarray[collation_dict, i] = 1
+                edf_channels_ndarray[logicol_channel_intervals, i] = 1
     edf_channels_mtx = pd.DataFrame(edf_channels_ndarray, index=edf_channels_superset, columns=edf_files, dtype=np.int8)
 
     # for each channel, get the number of files it appears in
@@ -307,7 +306,7 @@ def edf_collate(root, out):
     # work out where each file starts/ends (sample-wise) in the logical collation
     # i.e, if we were to stitch the EDF files together into one, accounting for gaps, from which & to which samples
     #   would each file occupy, not yet assuming overlaps are possible
-    logicol_intervals = {}
+    logicol_file_intervals = {}
     for file, interval in edf_intervals.items():
 
         file_start_dt = interval[0]
@@ -323,35 +322,66 @@ def edf_collate(root, out):
         # logicol_file_end_samples = logicol_file_end_s * edf_sample_rate
         logicol_file_end_samples = logicol_file_start_samples + file_dur_samples
 
-        logicol_intervals[file] = (logicol_file_start_samples, logicol_file_end_samples)
+        logicol_file_intervals[file] = (logicol_file_start_samples, logicol_file_end_samples)
 
 
-    # initialise collation dict
-    # for each file, set up entry for each channel
-    # these entries will indicate where in the "theoretical collated" file channels start, stop
-    # we don't know where they will start/stop yet; we do this later
-    # we do know the raw data length of each channel; intially, this is the same for every channel in a file
-    # in an ideal world, this remains so; however, due to overlaps, we might need to cut bits off of the end of only
-    #  certain channels in a file.
-    # edf_overlap_resolve will use the data in this dict to find overlaps, and trim channel start/ends accordingly.
-    # \/\/\/\/\/\/\\/\/\/ remove me
-    # collation_dict = {}
-    # for file, channels in edf_channels_dict.items():
-    #     collation_dict[file] = {}
-    #
-    #     file_interval = edf_intervals[file]
-    #     file_dur_samples = file_interval[1] - file_interval[0]
-    #
-    #     for channel_label in channels:
-    #
-    #         collation_dict[file][channel_label] = {
-    #             "collated_start" : None,
-    #             "collated_end"   : None,
-    #             "channel_length" : file_dur_samples
-    #         }
+    # for each file, logical collation position for each channel (so same as logicol intervals, but greater resolution)
+    # these entries will indicate where in the collation of files channels start and stop
+    # ideally the same for each channel in each file, but facility provided to adjust on per-channel basis
+    #   e.g, if 2 files overlap, but only in the ECG channel etc
+    # note we do not yet consider overlaps; intervals in this dict are allowed to overlap.
+    #   edf_overlap_resolve will use the data in this dict to find overlaps, and trim channel start/ends accordingly.
+    logicol_channel_intervals = {}
+    for file, channels in edf_channels_dict.items():
+        logicol_channel_intervals[file] = {}
+
+        for channel_label in channels:
+
+            logicol_channel_intervals[file][channel_label] = {
+
+                # initialise start/end per channel in file as the same
+                # in an ideal world, this remains so, but we may have to adjust channels within files for overlaps
+                "collated_start":   logicol_file_intervals[file][0],
+                "collated_end":     logicol_file_intervals[file][1],
+
+                # this remains the same, regardless of whether we adjust channel for overlaps.
+                # length of this channel data as-is, if we turned it into an array
+                "channel_length":   logicol_file_intervals[file][1] - logicol_file_intervals[file][0]
+            }
 
 
+    # assign increasing numerical value to each file to indicate its position
+    logicol_file_positions = dict(zip(logicol_file_intervals.keys(), range(0, len(logicol_file_intervals))))
 
+
+    # convert logicol_channel_intervals to a daat frame and output as CSV, for use by other programs
+    logicol_mtx_entries = []
+    logicol_mtx_entry = {
+        "file":             None,  # what file is this channel in?
+        "file_pos":         None,  # what position is this file in collated set?
+        "channel":          None,  # what channel are we looking at?
+        "collated_start":   None,  # what index in collated file does this channel start at?
+        "collated_end":     None,
+        "channel_length":   None,  # what is the length of this channel, regardless of whether we trim it for overlaps?
+    }
+    for file, channels in logicol_channel_intervals.items():
+
+        file_pos = logicol_file_positions[file]
+
+        for channel, channel_details in channels.items():
+            channel_entry = logicol_mtx_entry.copy()
+
+            channel_entry["file"] = file
+            channel_entry["file_pos"] = file_pos
+            channel_entry["channel"] = channel
+            channel_entry["collated_start"] = channel_details["collated_start"]
+            channel_entry["collated_end"] = channel_details["collated_end"]
+            channel_entry["channel_length"] = channel_details["channel_length"]
+
+            logicol_mtx_entries.append(channel_entry)
+
+    logicol_mtx = pd.DataFrame([entry for entry in logicol_mtx_entries])
+    logicol_mtx.to_csv(os.path.join(out, "logicol_mtx_no_overlap_check.csv"))
 
     return
 
