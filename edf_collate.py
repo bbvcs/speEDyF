@@ -9,14 +9,13 @@ import pandas as pd
 import pyedflib
 
 from utils.custom_print import print
-from edf_resolve_overlaps import OverlapType, check_time_overlap, check_channel_overlap, resolve_overlap2
+from utils import constants
+from edf_resolve_overlaps import OverlapType, check_time_overlap, check_channel_overlap, interval_plot, resolve_overlap
 from utils.resampling import all_header_indicated_sample_rates
 
 
 
 def edf_collate_OLD(root, out):
-
-    VERBOSE = True  # TODO make param
 
     edf_files = []
     bad_files = []
@@ -33,7 +32,7 @@ def edf_collate_OLD(root, out):
         try:
             edf_headers[file] = pyedflib.highlevel.read_edf_header(file, read_annotations=False)
         except OSError as e:
-            print(f"\tCould not read {file} ({e})", enabled=VERBOSE)
+            print(f"\tCould not read {file} ({e})", enabled=constants.VERBOSE)
             bad_files.append(file)
 
     for file in bad_files:
@@ -68,7 +67,7 @@ def edf_collate_OLD(root, out):
         print("Channels {} will be excluded, as they are in less than 75% of {} files (counts {}, 75% thresh: {})".format(
                 excluded_channels, len(edf_files),
                 [edf_channels_counts[channel] for channel in excluded_channels], min_channel_count),
-            enabled=VERBOSE)
+            enabled=constants.VERBOSE)
     # TODO exclude (set to NaN in collation matrix)
 
     # using headers, collect start/end times for each file
@@ -138,9 +137,9 @@ def edf_collate_OLD(root, out):
                                                                           channel_file_b_interval[0], channel_file_b_interval[1])
 
                         if overlap_type != OverlapType.NO_OVERLAP:
-                            print(str(overlap_type), enabled=VERBOSE)
+                            print(str(overlap_type), enabled=constants.VERBOSE)
 
-                            resolve_overlap2(overlapping_pair_count, resolution_mtx_entries, edf_channel_intervals, edf_sample_rate,
+                            resolve_overlap(overlapping_pair_count, resolution_mtx_entries, edf_channel_intervals, edf_sample_rate,
                                             channel_label, channel_file_a_interval, channel_file_b_interval,
                                             file_a, file_a_header,
                                             file_b, file_b_header,
@@ -168,7 +167,7 @@ def edf_collate_OLD(root, out):
     #     overlap_type, overlap_period = check_time_overlap(file_a_start, file_a_end, file_b_start, file_b_end)
     #
     #     if overlap_type != OverlapType.NO_OVERLAP:
-    #         print(str(overlap_type), enabled=VERBOSE)
+    #         print(str(overlap_type), enabled=constants.VERBOSE)
     #
     #         # OK, but do they have the same channels?
     #         #   > if not, no problem; there isn't any overlap.
@@ -219,8 +218,6 @@ def edf_collate_OLD(root, out):
 
 def edf_collate(root, out):
 
-    VERBOSE = True  # TODO make param
-
     if not os.path.isdir(root):
         raise FileNotFoundError(f"Directory {root} could not be found.")
 
@@ -239,7 +236,7 @@ def edf_collate(root, out):
         try:
             edf_headers[file] = pyedflib.highlevel.read_edf_header(file, read_annotations=False)
         except OSError as e:
-            print(f"\tCould not read {file} ({e}), so removing from further processing.", enabled=VERBOSE)
+            print(f"\tCould not read {file} ({e}), so removing from further processing.", enabled=constants.VERBOSE)
             unreadable_files.append(file)
 
     # remove any files that we couldn't read
@@ -280,7 +277,7 @@ def edf_collate(root, out):
         print("Channels {} will be excluded, as they are in less than 75% of {} files (counts {}, 75% thresh: {})".format(
                 excluded_channels, len(edf_files),
                 [edf_channels_counts[channel] for channel in excluded_channels], min_channel_count),
-            enabled=VERBOSE)
+            enabled=constants.VERBOSE)
     # TODO exclude (set to NaN in collation matrix)
 
     # using headers, collect start/end times for each file
@@ -354,7 +351,7 @@ def edf_collate(root, out):
     logicol_file_positions = dict(zip(logicol_file_intervals.keys(), range(0, len(logicol_file_intervals))))
 
 
-    # convert logicol_channel_intervals to a daat frame and output as CSV, for use by other programs
+    # convert logicol_channel_intervals to a data frame and output as CSV, for use by other programs
     logicol_mtx_entries = []
     logicol_mtx_entry = {
         "file":             None,  # what file is this channel in?
@@ -381,21 +378,29 @@ def edf_collate(root, out):
             logicol_mtx_entries.append(channel_entry)
 
     logicol_mtx = pd.DataFrame([entry for entry in logicol_mtx_entries])
-    logicol_mtx.to_csv(os.path.join(out, "logicol_mtx_no_overlap_check.csv"))
+    logicol_mtx.to_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_CHECK_FILENAME), index_label="index")
 
     return
 
 
 if __name__ == "__main__":
     # TODO: add argparse library, pass in root/out
-    root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909"
+    #root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909"
     #root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909/test_overlap_3"
     #root = "/home/bcsm/Desktop/895" # partial, non-identical (real)
     # root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909/test_overlap_partial_nonidentical" # simulated
     #root = "/home/bcsm/Desktop/865" # many partial identical
-    #root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/put_my_contents_back_in_909/test_3_shifted_overlap"
+
+    root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/put_my_contents_back_in_909/test_3_shifted_overlap"
+    #root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/put_my_contents_back_in_909/test_overlap_2"
 
     # dir to save results for this run i.e matrix, overlap resolutions
     out = "out/testing"
 
     edf_collate(root, out)
+
+
+    ## in future, remove all below this line
+
+    from edf_resolve_overlaps import edf_check_overlap
+    edf_check_overlap(root,out)

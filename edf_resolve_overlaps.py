@@ -1,12 +1,16 @@
 import datetime
 import enum
 import os
+import itertools
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 import pyedflib
+
+from utils import constants
+from utils.custom_print import print
 
 
 class OverlapType(enum.Enum):
@@ -86,7 +90,7 @@ class ResolutionMatrixEntry():
 
 def check_time_overlap(t1_start, t1_end, t2_start, t2_end):
     """
-    Return Overlap type and overlap start/end time if two recordings overlap in time, otherwise No Overlap and None.
+    Return Overlap type and overlap start/end time and duration if two recordings overlap in time, otherwise No Overlap and None.
     """
 
     # thanks to: https://chandoo.org/wp/date-overlap-formulas/
@@ -182,10 +186,10 @@ def check_channel_overlap(file_a_header, file_b_header):
 
     return [common_channels, file_a_unique_channels, file_b_unique_channels]
 
-def resolve_overlap(overlapping_pair_count, resolution_mtx_entries: list[ResolutionMatrixEntry], j, hz, channel_check_results,
-                    file_a_path, file_a_header,
-                    file_b_path, file_b_header,
-                    overlap_type: OverlapType, overlap_period):
+def resolve_overlap_OLD(overlapping_pair_count, resolution_mtx_entries: list[ResolutionMatrixEntry], j, hz, channel_check_results,
+                        file_a_path, file_a_header,
+                        file_b_path, file_b_header,
+                        overlap_type: OverlapType, overlap_period):
 
     common_channels = channel_check_results[0]
     file_a_unique_channels = channel_check_results[1]
@@ -332,11 +336,11 @@ def resolve_overlap(overlapping_pair_count, resolution_mtx_entries: list[Resolut
     file_b.close()
 
 
-def resolve_overlap2(overlapping_pair_count, resolution_mtx_entries: list[ResolutionMatrixEntry], edf_channel_intervals, hz,
-                     channel_label, channel_file_a_interval, channel_file_b_interval,
-                     file_a_path, file_a_header,
-                     file_b_path, file_b_header,
-                     overlap_type: OverlapType, overlap_period):
+def resolve_overlap(overlapping_pair_count, resolution_mtx_entries: list[ResolutionMatrixEntry], edf_channel_intervals, hz,
+                    channel_label, channel_file_a_interval, channel_file_b_interval,
+                    file_a_path, file_a_header,
+                    file_b_path, file_b_header,
+                    overlap_type: OverlapType, overlap_period):
 
 
     file_a_channel_idxs = {channel: i for i, channel in enumerate(file_a_header["channels"])}
@@ -494,3 +498,94 @@ def interval_plot(interval_list):
         ax.plot([start, end], [-i, -i])
 
     return fig, ax
+
+
+
+def edf_check_overlap(root, out):
+
+    # create a data structure to hold information about an overlap
+    overlap_mtx_entries = []
+    overlap_mtx_entry = {
+        "channel":              None,
+        "file_A":               None,
+        "file_B":               None,
+        "overlap_start":        None,
+        "overlap_end":          None,
+        "overlap_duration":     None,
+        "overlap_type":         None,
+        #"data_identical":       None, # bool
+        #"action_taken":         None,
+    }
+
+    logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_CHECK_FILENAME), index_col="index")
+    all_channels = pd.unique(logicol_mtx["channel"])
+
+    for channel in all_channels:
+
+        # get rows representing this channel across files
+        this_channel = logicol_mtx[logicol_mtx["channel"] == channel]
+
+        # produce every unique pair of these rows (using their index)
+        row_combinations = list(itertools.combinations(this_channel.index, 2))
+
+        for pair in row_combinations:
+
+            row_A = logicol_mtx.iloc[pair[0]]
+            row_B = logicol_mtx.iloc[pair[1]]
+
+            overlap_type, overlap_period = check_time_overlap(row_A["collated_start"], row_A["collated_end"],
+                                                              row_B["collated_start"], row_B["collated_end"],)
+
+            if overlap_type != OverlapType.NO_OVERLAP:
+                #print(f"{str(overlap_type), str(overlap_period)}", enabled=constants.VERBOSE)
+
+                overlap_entry = overlap_mtx_entry.copy()
+
+                overlap_entry["channel"] = channel
+                overlap_entry["file_A"] = row_A["file"]
+                overlap_entry["file_B"] = row_B["file"]
+                overlap_entry["overlap_start"] = overlap_period[0]
+                overlap_entry["overlap_end"] = overlap_period[1]
+                overlap_entry["overlap_duration"] = overlap_period[2]
+                overlap_entry["overlap_type"] = overlap_type
+
+                overlap_mtx_entries.append(overlap_entry)
+
+    #overlap_mtx = pd.DataFrame([entry for entry in overlap_mtx_entries])
+
+    return overlap_mtx_entries
+
+
+def edf_resolve_overlap(root, out):
+
+    # Idea
+        # this could be do while loop, which calls edf_check_overlap, gets list of entries back
+        # for each entry:
+            # is it in our list of already OK entries? if so, move on to next
+                # any that are found to be fine we add to a persistent list of "OK", so can quickly ignore in future
+            # check if it is OK?
+                # if OK, add to our list of OK entries
+            # if not OK,
+                # try to resolve
+                # resolving will cause changes to the logicol mtx, so save new state of this
+                # and call check again, start from first entry again
+
+    # create a data structure to hold information about an overlap
+    resolution_mtx_entries = []
+    resolution_mtx_entry = {
+        "channel":              None,
+        "file_A":               None,
+        "file_B":               None,
+        "overlap_start":        None,
+        "overlap_end":          None,
+        "overlap_duration":     None,
+        "overlap_type":         None,
+
+        "data_identical":       None,
+        "action_taken":         None,
+    }
+
+    # all_overlaps_checked = False
+    # while not all_overlaps_checked:
+
+
