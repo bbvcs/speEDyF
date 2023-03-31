@@ -10,11 +10,10 @@ import pyedflib
 
 from utils.custom_print import print
 from utils import constants
-from edf_resolve_overlaps import OverlapType, check_time_overlap, check_channel_overlap, interval_plot, resolve_overlap
 from utils.resampling import all_header_indicated_sample_rates
 
 
-
+"""
 def edf_collate_OLD(root, out):
 
     edf_files = []
@@ -214,7 +213,7 @@ def edf_collate_OLD(root, out):
 
 
     return
-
+"""
 
 def edf_collate(root, out):
 
@@ -380,18 +379,18 @@ def edf_collate(root, out):
     logicol_mtx = pd.DataFrame([entry for entry in logicol_mtx_entries])
     logicol_mtx.to_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_CHECK_FILENAME), index_label="index")
 
-    return
+    return # TODO return what
 
 
 if __name__ == "__main__":
     # TODO: add argparse library, pass in root/out
-    #root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909"
+    root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909"
     #root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909/test_overlap_3"
     #root = "/home/bcsm/Desktop/895" # partial, non-identical (real)
     # root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909/test_overlap_partial_nonidentical" # simulated
     #root = "/home/bcsm/Desktop/865" # many partial identical
 
-    root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/put_my_contents_back_in_909/test_3_shifted_overlap"
+    #root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/put_my_contents_back_in_909/test_3_shifted_overlap"
     #root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/put_my_contents_back_in_909/test_overlap_2"
 
     # dir to save results for this run i.e matrix, overlap resolutions
@@ -402,5 +401,6 @@ if __name__ == "__main__":
 
     ## in future, remove all below this line
 
-    from edf_resolve_overlaps import edf_check_overlap
-    edf_check_overlap(root,out)
+    from edf_resolve_overlaps import edf_check_overlap, edf_resolve_overlap
+    edf_check_overlap(root, out, verbose=True)
+    #edf_resolve_overlap(root, out)

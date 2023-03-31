@@ -20,18 +20,19 @@ class OverlapType(enum.Enum):
     # e.g:
     # f1:   t1_start---------------->t1_end
     # f2:              t2_start------------ ...
-    PARTIAL_BOTH_FILES = 2,
+    PARTIAL_BOTH_ENDOF_A = 2,  # the situation above
+    PARTIAL_BOTH_ENDOF_B = 3,  # the situation above but flipped
 
     # e.g:
     # f1:           t1_start-------->t1_end
     # f2:  t2_start--------------------------->t2_end
-    ENTIRETY_FILE_A = 3,  # the situation above
-    ENTIRETY_FILE_B = 4,  # the situation above but flipped
+    ENTIRETY_FILE_A = 4,  # the situation above
+    ENTIRETY_FILE_B = 5,  # the situation above but flipped
 
     # e.g:
     # f1:  t1_start----------------->t1_end
     # f2:  t2_start----------------->t2_end
-    ENTIRETY_BOTH_FILES = 5
+    ENTIRETY_BOTH_FILES = 6
 
 class ResolutionMatrixEntry():
 
@@ -126,7 +127,7 @@ def check_time_overlap(t1_start, t1_end, t2_start, t2_end):
         # f2:              t2_start------------ ...
         elif ((t2_start >= t1_start) and (t2_start < t1_end)) or (t2_start == t1_end):
 
-            type = OverlapType.PARTIAL_BOTH_FILES
+            type = OverlapType.PARTIAL_BOTH_ENDOF_A
             t3_start = t2_start
 
             # does f2 start and end during f1? e.g
@@ -143,7 +144,7 @@ def check_time_overlap(t1_start, t1_end, t2_start, t2_end):
         # f2:  t2_start--------------->t2_end
         elif ((t1_start >= t2_start) and (t1_start < t2_end)) or (t1_start == t2_end):
 
-            type = OverlapType.PARTIAL_BOTH_FILES
+            type = OverlapType.PARTIAL_BOTH_ENDOF_B
             t3_start = t1_start
 
             # does f1 start and end during f2? e.g
@@ -186,6 +187,7 @@ def check_channel_overlap(file_a_header, file_b_header):
 
     return [common_channels, file_a_unique_channels, file_b_unique_channels]
 
+"""
 def resolve_overlap_OLD(overlapping_pair_count, resolution_mtx_entries: list[ResolutionMatrixEntry], j, hz, channel_check_results,
                         file_a_path, file_a_header,
                         file_b_path, file_b_header,
@@ -485,7 +487,7 @@ def resolve_overlap(overlapping_pair_count, resolution_mtx_entries: list[Resolut
                 raise NotImplementedError
     file_a.close()
     file_b.close()
-
+"""
 
 def interval_plot(interval_list):
 
@@ -501,7 +503,7 @@ def interval_plot(interval_list):
 
 
 
-def edf_check_overlap(root, out):
+def edf_check_overlap(root, out, mtx=None, verbose=False):
 
     # create a data structure to hold information about an overlap
     overlap_mtx_entries = []
@@ -517,7 +519,17 @@ def edf_check_overlap(root, out):
         #"action_taken":         None,
     }
 
+
     logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_CHECK_FILENAME), index_col="index")
+
+    # edf_check_overlap will provide an overlap-adjusted mtx we should use instead
+    if isinstance(mtx, pd.DataFrame):
+        # try to ensure mtx is of correct format
+        if list(mtx.columns) == list(logicol_mtx.columns):
+            logicol_mtx = mtx
+        else:
+            raise TypeError("Matrix provided does not appear to be similar to logicol_mtx")
+
     all_channels = pd.unique(logicol_mtx["channel"])
 
     for channel in all_channels:
@@ -551,24 +563,31 @@ def edf_check_overlap(root, out):
 
                 overlap_mtx_entries.append(overlap_entry)
 
-    #overlap_mtx = pd.DataFrame([entry for entry in overlap_mtx_entries])
+    # TODO do we want to save overlap_mtx? current only used for verbose
+    overlap_mtx = pd.DataFrame([entry for entry in overlap_mtx_entries])
+
+    if verbose:
+        n_overlaps = overlap_mtx.shape[0]
+        if n_overlaps == 0:
+            print("No overlaps detected.", enabled=True)
+        else:
+            n_overlapping_channels = len(pd.unique(overlap_mtx["channel"]))
+            n_channels_total = len(pd.unique(logicol_mtx["channel"]))
+
+            n_overlapping_files = overlap_mtx.groupby(["file_A", "file_B"]).ngroups
+            n_files_total = len(pd.unique(logicol_mtx["file"]))
+            print(f"{n_overlaps} overlaps across {n_overlapping_channels}/{n_channels_total} channels across {n_overlapping_files}/{n_files_total} files!", enabled=True)
 
     return overlap_mtx_entries
 
 
 def edf_resolve_overlap(root, out):
 
-    # Idea
-        # this could be do while loop, which calls edf_check_overlap, gets list of entries back
-        # for each entry:
-            # is it in our list of already OK entries? if so, move on to next
-                # any that are found to be fine we add to a persistent list of "OK", so can quickly ignore in future
-            # check if it is OK?
-                # if OK, add to our list of OK entries
-            # if not OK,
-                # try to resolve
-                # resolving will cause changes to the logicol mtx, so save new state of this
-                # and call check again, start from first entry again
+    # logicol_mtx holds information on where channels start/end in logical collation, though overlaps may be present
+    logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_CHECK_FILENAME), index_col="index")
+    # we will trim overlaps from this mtx in this method, if there are any
+    logicol_mtx_trimmed = logicol_mtx.copy()
+
 
     # create a data structure to hold information about an overlap
     resolution_mtx_entries = []
@@ -585,7 +604,43 @@ def edf_resolve_overlap(root, out):
         "action_taken":         None,
     }
 
-    # all_overlaps_checked = False
-    # while not all_overlaps_checked:
+
+    resolved_overlaps = []
+    all_overlaps_checked = False
+    while not all_overlaps_checked:
+
+        overlaps = edf_check_overlap(root, out, mtx=logicol_mtx_trimmed)
+        # TODO need edf_check_overlap to be able to see trimmed mtx - optional param?
+
+        if len(overlaps) == 0:
+            all_overlaps_checked = True
+
+        # resolve first overlap, then re-call check_overlaps; if resolved, it will not be present, and we move on to next
+        overlap = overlaps[0]
+
+        # get the logicol info for these channels
+        file_a_logicol = logicol_mtx_trimmed.loc[
+            (logicol_mtx_trimmed["file"] == overlap["file_A"]) & (logicol_mtx_trimmed["channel"] == overlap["channel"])]
+        file_b_logicol = logicol_mtx_trimmed.loc[
+            (logicol_mtx_trimmed["file"] == overlap["file_B"]) & (logicol_mtx_trimmed["channel"] == overlap["channel"])]
+
+        # open handles to access file data
+        file_a = pyedflib.EdfReader(overlap["file_A"], 0, 1)
+        file_b = pyedflib.EdfReader(overlap["file_B"], 0, 1)
+
+        # read the overlapping data from both files
+        # we need to get the start/end of overlap WITHIN THE FILES for this
+        match overlap["overlap_type"]:
+
+            case OverlapType.PARTIAL_BOTH_ENDOF_A:
+
+                file_a_overlap_start = NotImplementedError
+
+
+
+
+
+        file_a.close()
+        file_b.close()
 
 
