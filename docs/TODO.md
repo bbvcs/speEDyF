@@ -14,6 +14,9 @@
     # 895 - channels g14 vs G14?
     # find dog data and run it on that
 
+    # take hash of filesystem under root directory
+        # so can tell if changed and program won't work anymore
+
 # Major things left TODO
     # RESAMPLING!
         # needs to be done before any overlap resolution!

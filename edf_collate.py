@@ -1,10 +1,11 @@
 import os
 import datetime
-import itertools
 import math
+import json
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 import pyedflib
 
@@ -379,6 +380,20 @@ def edf_collate(root, out):
     logicol_mtx = pd.DataFrame([entry for entry in logicol_mtx_entries])
     logicol_mtx.to_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_CHECK_FILENAME), index_label="index")
 
+    # save details like root dir and sample rate to a details .json file, for use by other scripts
+    with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "w") as details_file:
+        details = {
+            "root": root,
+            "sample_rate": int(edf_sample_rate),
+            "channels_superset": edf_channels_superset,
+        }
+        json.dump(details, details_file)
+
+
+
+
+
+
     return # TODO return what
 
 
@@ -404,3 +419,18 @@ if __name__ == "__main__":
     from edf_resolve_overlaps import edf_check_overlap, edf_resolve_overlap
     edf_check_overlap(root, out, verbose=True)
     #edf_resolve_overlap(root, out)
+
+    from edf_segment import EDF_Segment, EDF_SegmentIterator
+    #segmenter = EDF_Segment(root, out, cache_lifetime=3)
+    #segment = segmenter.get_segment(idx=38)
+    # for i in range(0, 50):
+    #     segmenter.get_segment(idx=i)
+
+    #segments = segmenter.get_segments(start_idx=0, end_idx=100)
+
+    segmenter = EDF_SegmentIterator(root, out, segment_len_s=300, channels=["ECG"])
+    for i, segment in enumerate(segmenter):
+        print(f"{i}/{segmenter.get_segment_count()}", enabled=True)
+
+
+    pass
