@@ -10,7 +10,6 @@ import pyedflib
 
 from utils.custom_print import print
 from utils import constants
-from edf_resolve_overlaps import check_time_overlap_binary_wrapper
 
 
 class EDF_Segment:
@@ -249,7 +248,7 @@ class EDF_SegmentIterator(EDF_Segment):
     """ Provides an interface to iterate over all segments one-by-one"""
 
     def __init__(self, root, out, start_idx=0, end_idx=None, count=None, segment_len_s = 300, cache_lifetime=10, channels="all", as_DataFrame=True):
-        super().__init__(root, out, segment_len_s = 300, cache_lifetime=10)
+        super().__init__(root, out, segment_len_s = segment_len_s, cache_lifetime=cache_lifetime)
 
         self._idx = start_idx
 

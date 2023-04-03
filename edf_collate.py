@@ -2,6 +2,7 @@ import os
 import datetime
 import math
 import json
+import time
 
 import numpy as np
 import pandas as pd
@@ -398,6 +399,9 @@ def edf_collate(root, out):
 
 
 if __name__ == "__main__":
+
+    start = time.time()
+
     # TODO: add argparse library, pass in root/out
     root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909"
     #root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909/test_overlap_3"
@@ -411,6 +415,9 @@ if __name__ == "__main__":
     # dir to save results for this run i.e matrix, overlap resolutions
     out = "out/testing"
 
+    # subject = "909"
+    # root = "/home/.../data/{subject}"
+    # out = "out/{subject}"
     edf_collate(root, out)
 
 
@@ -421,16 +428,27 @@ if __name__ == "__main__":
     #edf_resolve_overlap(root, out)
 
     from edf_segment import EDF_Segment, EDF_SegmentIterator
-    #segmenter = EDF_Segment(root, out, cache_lifetime=3)
-    #segment = segmenter.get_segment(idx=38)
+    #
+    # segmenter = EDF_Segment(root, out, segment_len_s=300)
+    # segment = segmenter.get_segment(idx=38)
+    #
+    # segmenter = EDF_Segment(root, out, segment_len_s=300)
     # for i in range(0, 50):
-    #     segmenter.get_segment(idx=i)
+    #      segmenter.get_segment(idx=i)
+    #
+    # segmenter = EDF_Segment(root, out, segment_len_s=300)
+    # segments = segmenter.get_segments(start_idx=0, end_idx=100)
+    # segments = segmenter.get_segments(start_idx=0, end_idx=segmenter.get_segment_count())
+    # segments = segmenter.get_segments(start_idx=0, count=100)
+    #
+    # segmenter = EDF_SegmentIterator(root, out, segment_len_s=300)
+    # for segment in segmenter:
+    #     ...
 
-    #segments = segmenter.get_segments(start_idx=0, end_idx=100)
-
-    segmenter = EDF_SegmentIterator(root, out, segment_len_s=300, channels=["ECG"])
+    segmenter = EDF_SegmentIterator(root, out, segment_len_s=300)
     for i, segment in enumerate(segmenter):
         print(f"{i}/{segmenter.get_segment_count()}", enabled=True)
 
+    end = time.time()
+    print(f"Time elapsed: {end-start}", enabled=True)
 
-    pass
