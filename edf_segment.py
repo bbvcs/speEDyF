@@ -8,8 +8,8 @@ import pandas as pd
 
 import pyedflib
 
-from utils.custom_print import print
-from utils import constants
+from .utils.custom_print import print
+from .utils import constants
 
 
 class EDF_Segment:
@@ -49,7 +49,7 @@ class EDF_Segment:
                                           "collated_end":   segment_onsets + self.segment_len_samples})
 
 
-    def get_segment_count(self):
+    def get_max_segment_count(self):
         """How many segments of the specified time can be made?"""
         return self.segments_mtx.shape[0]
 
@@ -103,7 +103,6 @@ class EDF_Segment:
             for file in to_delete:
                 for channel in to_delete[file]:
                     del self.cache[file][channel]
-
 
 
     def get_segment(self, idx=None, channels="all", as_DataFrame=True): # TODO collated_start, collated_end param
@@ -232,7 +231,7 @@ class EDF_Segment:
             if count:
                 end_idx = start_idx+count
             elif count == None:
-                end_idx = self.get_segment_count()
+                end_idx = self.get_max_segment_count()
 
         for i in range(start_idx, end_idx):
             if verbose: print(f"{i}/{end_idx-start_idx}", enabled=True)
@@ -244,7 +243,7 @@ class EDF_Segment:
 
 
 
-class EDF_SegmentIterator(EDF_Segment):
+class EDF_Segment_Iterator(EDF_Segment):
     """ Provides an interface to iterate over all segments one-by-one"""
 
     def __init__(self, root, out, start_idx=0, end_idx=None, count=None, segment_len_s = 300, cache_lifetime=10, channels="all", as_DataFrame=True):
@@ -262,7 +261,7 @@ class EDF_SegmentIterator(EDF_Segment):
             if count:
                 self.end_idx = start_idx + count
             elif count == None:
-                self.end_idx = self.get_segment_count()
+                self.end_idx = self.get_max_segment_count()
 
 
         self.as_DataFrame = as_DataFrame
@@ -286,3 +285,10 @@ class EDF_SegmentIterator(EDF_Segment):
             return self.edf_channels_superset
         else:
             return self.channels
+
+    def set_channels(self, channels):
+
+        if channels != "all" and (not isinstance(channels, list) or any([type(ch) != str for ch in channels])):
+            raise TypeError("Please ensure 'channels' is either 'all' or a list of strings.")
+
+        self.channels = channels

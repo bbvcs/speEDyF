@@ -2,7 +2,7 @@ import os
 import datetime
 import math
 import json
-import time
+
 
 import numpy as np
 import pandas as pd
@@ -10,10 +10,9 @@ import matplotlib.pyplot as plt
 
 import pyedflib
 
-from utils.custom_print import print
-from utils import constants
-from utils.resampling import all_header_indicated_sample_rates
-
+from .utils.custom_print import print
+from .utils import constants
+from .utils.resampling import all_header_indicated_sample_rates
 
 """
 def edf_collate_OLD(root, out):
@@ -218,9 +217,34 @@ def edf_collate_OLD(root, out):
 """
 
 def edf_collate(root, out):
+    """ Produce a matrix representation of a chronologically ordered collection of EDF files.
+
+    Given a root directory, find all EDF files present in the directory and any subdirectories.
+    Using their headers, order them chronologically, and produce a "Logical Collation" matrix of these files.
+
+    A "Physical Collation" (abbr. physicol) of these EDF files would be a large EDF file on disk, containing the data of all the EDF files
+    under the root directory, concatenated with gaps in recording time accounted for.
+
+    The "Logical Collation" (abbr. logicol) is a matrix representation of the physicol, where files are chronologically
+    ordered, and where each channel in a file has its own row, with start/end idx of that channel within the
+    hypothetical physical collation. This can be then used by other programs in the pipeline, such as by edf_segment to
+    determine how to break up the data into segments, and which files to extract data for a segment from.
+
+    NOTE:
+    - This method produces only the logicol, which could later be used to produce the physicol if necessary.
+    - This method *does not* check for any overlap between EDF files - there may be overlapping data in the logicol.
+        - see edf_overlaps
+
+    :param root: a directory containing EDF files and/or subdirectories with EDF files etc.
+    :param out: a directory to save the collation outputs.
+    :return: logicol_mtx (pd.DataFrame), which is also saved to the out/ directory as a .csv.
+    """
 
     if not os.path.isdir(root):
         raise FileNotFoundError(f"Directory {root} could not be found.")
+
+    if not os.path.isdir(out):
+        os.makedirs(out)
 
     edf_files = []
     unreadable_files = []
@@ -269,6 +293,7 @@ def edf_collate(root, out):
             if channel_label in edf_headers[file]["channels"]:
                 edf_channels_ndarray[logicol_channel_intervals, i] = 1
     edf_channels_mtx = pd.DataFrame(edf_channels_ndarray, index=edf_channels_superset, columns=edf_files, dtype=np.int8)
+    edf_channels_mtx.to_csv(os.path.join(out, constants.CHANNEL_PRESENCE_MATRIX_FILENAME), index_label="index")
 
     # for each channel, get the number of files it appears in
     edf_channels_counts = {channel:np.sum(edf_channels_mtx.loc[channel]) for channel in edf_channels_superset}
@@ -351,7 +376,6 @@ def edf_collate(root, out):
     # assign increasing numerical value to each file to indicate its position
     logicol_file_positions = dict(zip(logicol_file_intervals.keys(), range(0, len(logicol_file_intervals))))
 
-
     # convert logicol_channel_intervals to a data frame and output as CSV, for use by other programs
     logicol_mtx_entries = []
     logicol_mtx_entry = {
@@ -390,65 +414,8 @@ def edf_collate(root, out):
         }
         json.dump(details, details_file)
 
+    return logicol_mtx
 
 
 
-
-
-    return # TODO return what
-
-
-if __name__ == "__main__":
-
-    start = time.time()
-
-    # TODO: add argparse library, pass in root/out
-    root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909"
-    #root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909/test_overlap_3"
-    #root = "/home/bcsm/Desktop/895" # partial, non-identical (real)
-    # root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909/test_overlap_partial_nonidentical" # simulated
-    #root = "/home/bcsm/Desktop/865" # many partial identical
-
-    #root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/put_my_contents_back_in_909/test_3_shifted_overlap"
-    #root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/put_my_contents_back_in_909/test_overlap_2"
-
-    # dir to save results for this run i.e matrix, overlap resolutions
-    out = "out/testing"
-
-    # subject = "909"
-    # root = "/home/.../data/{subject}"
-    # out = "out/{subject}"
-    edf_collate(root, out)
-
-
-    ## in future, remove all below this line
-
-    from edf_resolve_overlaps import edf_check_overlap, edf_resolve_overlap
-    edf_check_overlap(root, out, verbose=True)
-    #edf_resolve_overlap(root, out)
-
-    from edf_segment import EDF_Segment, EDF_SegmentIterator
-    #
-    # segmenter = EDF_Segment(root, out, segment_len_s=300)
-    # segment = segmenter.get_segment(idx=38)
-    #
-    # segmenter = EDF_Segment(root, out, segment_len_s=300)
-    # for i in range(0, 50):
-    #      segmenter.get_segment(idx=i)
-    #
-    # segmenter = EDF_Segment(root, out, segment_len_s=300)
-    # segments = segmenter.get_segments(start_idx=0, end_idx=100)
-    # segments = segmenter.get_segments(start_idx=0, end_idx=segmenter.get_segment_count())
-    # segments = segmenter.get_segments(start_idx=0, count=100)
-    #
-    # segmenter = EDF_SegmentIterator(root, out, segment_len_s=300)
-    # for segment in segmenter:
-    #     ...
-
-    segmenter = EDF_SegmentIterator(root, out, segment_len_s=300)
-    for i, segment in enumerate(segmenter):
-        print(f"{i}/{segmenter.get_segment_count()}", enabled=True)
-
-    end = time.time()
-    print(f"Time elapsed: {end-start}", enabled=True)
 

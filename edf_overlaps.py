@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 
 import pyedflib
 
-from utils import constants
-from utils.custom_print import print
+from .utils import constants
+from .utils.custom_print import print
 
 
 class OverlapType(enum.Enum):
@@ -503,7 +503,7 @@ def interval_plot(interval_list):
 
 
 
-def edf_check_overlap(root, out, mtx=None, verbose=False):
+def check(root, out, mtx=None, verbose=False):
 
     # create a data structure to hold information about an overlap
     overlap_mtx_entries = []
@@ -581,7 +581,7 @@ def edf_check_overlap(root, out, mtx=None, verbose=False):
     return overlap_mtx_entries
 
 
-def edf_resolve_overlap(root, out):
+def resolve(root, out):
 
     # logicol_mtx holds information on where channels start/end in logical collation, though overlaps may be present
     logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_CHECK_FILENAME), index_col="index")
@@ -609,7 +609,7 @@ def edf_resolve_overlap(root, out):
     all_overlaps_checked = False
     while not all_overlaps_checked:
 
-        overlaps = edf_check_overlap(root, out, mtx=logicol_mtx_trimmed)
+        overlaps = check(root, out, mtx=logicol_mtx_trimmed)
         # TODO need edf_check_overlap to be able to see trimmed mtx - optional param?
 
         if len(overlaps) == 0:
