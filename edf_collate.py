@@ -423,7 +423,7 @@ def edf_collate(root, out):
     logicol_mtx = logicol_mtx[~logicol_mtx["channel"].isin(excluded_channels)]
 
     # save to csv
-    logicol_mtx.to_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_CHECK_FILENAME), index_label="index")
+    logicol_mtx.to_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME), index_label="index")
 
     # save details like root dir and channels list to a details .json file, for use by other scripts
     with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "w") as details_file:

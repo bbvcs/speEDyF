@@ -1,4 +1,5 @@
 import os
+import sys
 import datetime
 import math
 import json
@@ -8,6 +9,7 @@ import pandas as pd
 
 import pyedflib
 
+from .edf_overlaps import check
 from .utils.custom_print import print
 from .utils import constants
 
@@ -45,7 +47,25 @@ class EDF_Segmenter:
 
         # TODO need to know to load trimmed matrix if needs be - or will we save trim as normal?
         # logicol_mtx holds information on where channels start/end in logical collation, though overlaps may be present
-        self.logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_CHECK_FILENAME), index_col="index")
+        self.logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME), index_col="index")
+
+
+        try:
+            self.logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME), index_col="index")
+            print("Overlap-trimmed Logicol Matrix found and successfully loaded, enabled=True")
+
+        except FileNotFoundError:
+
+            if len(check(root, out)) > 0:
+                print(f"Warning: Trimmed Logicol Matrix could not be found in {out}, and it appears there are overlaps in your data.\n"
+                      f"It is highly recommended that you run edf_overlaps.resolve(), to resolve these overlaps.\n"
+                      f"Continue anyway with overlaps present? (y/n)\n", enabled=True)
+                if str(input()).lower() != "y":
+                    sys.exit(0)
+
+            self.logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME),
+                                           index_col="index")
+
 
         with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "r") as details_file:
             details = json.load(details_file)
