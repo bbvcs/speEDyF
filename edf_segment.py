@@ -133,8 +133,8 @@ class EDF_Segmenter:
         if channels != "all" and (not isinstance(channels, list) or any([type(ch) != str for ch in channels])):
             raise TypeError("Please ensure 'channels' is either 'all' or a list of strings.")
 
+        # are we using index in segment_mtx to determine collated start/end, or have they been provided manually?
         # have to use "is/is not None" as idx, collated start/end are either None or integer types.
-
         if (idx is None and (collated_start is None and collated_end is None)) \
                 or (idx is not None and (collated_start is not None or collated_end is not None)):
             raise TypeError("Either segment index (row in Segment Matrix containing collated start/end) OR a collated start AND end must be provided, but not both. ")
@@ -148,12 +148,11 @@ class EDF_Segmenter:
             segment_collated_start = collated_start
             segment_collated_end = collated_end
 
-        # find any channels in logicol mtx that overlap (w.r.t index) with segment start/end index
-        #segment_channels = self.logicol_mtx.query("not (@segment_collated_end <= collated_start) or (collated_end <= @segment_collated_start)")
+        # find any channels in logicol mtx that overlap in time with our segment (i.e; channels we will use for segment)
         segment_channels = self.logicol_mtx.query(
             "(@segment_collated_end >= collated_start) and (collated_end > @segment_collated_start)")
 
-
+        # decide upon a sample rate for this segment, by looking at the channel data we are extracting
         segment_channels_sample_rates = pd.unique(segment_channels["channel_sample_rate"])
         if len(segment_channels_sample_rates) == 0:
             # segment has no files - it is completely a gap in time
@@ -161,19 +160,20 @@ class EDF_Segmenter:
 
         elif len(segment_channels_sample_rates) > 1:
             raise NotImplementedError("Segments currently only support files of the same sample rate") # TODO
+            # remember; if this scenario occurs, AND there is a gap between files,
+            # the gap can just be sampled at the decided-upon sample rate for this segment
+            # (i.e whatever sample rate we are down/upsampling the other file(s) too)
 
         else:
             segment_sample_rate = segment_channels_sample_rates[0]  # TEMPORARY
 
-        # if custom collated start/end specified, segment_len_s may differ from self.segment_len_s
+        # (if custom collated start/end specified, segment_len_s may differ from self.segment_len_s)
         segment_len_s = segment_collated_end - segment_collated_start
-
 
         segment_len_samples = segment_len_s * segment_sample_rate
         segment_len_samples = int(np.floor(segment_len_samples))
 
-
-        # initialise segment
+        # initialise segment buffer - where we read relevant channel data in to
         if channels == "all":
             segment_data = np.full(shape=(len(self.edf_channels_superset), segment_len_samples), fill_value=np.NaN)
         else:
@@ -262,8 +262,7 @@ class EDF_Segmenter:
                 segment_write_start = channel_collated_start - segment_collated_start
                 segment_write_stop = segment_write_start + channel_read_sample_count
 
-
-            # TODO should probably use one sample rate variable. How to deal with 2 files with differing sample rate?
+            # TODO should probably use only one sample rate variable. How to deal with 2 files with differing sample rate?
 
             channel_read_start  = int(np.floor(channel_read_start * channel_sample_rate))
             channel_read_stop   = int(np.floor(channel_read_stop  * channel_sample_rate))
