@@ -542,8 +542,8 @@ def check(root, out, mtx=None, verbose=False):
 
         for pair in row_combinations:
 
-            row_A = logicol_mtx.iloc[pair[0]]
-            row_B = logicol_mtx.iloc[pair[1]]
+            row_A = this_channel.loc[pair[0]]
+            row_B = this_channel.loc[pair[1]]
 
             overlap_type, overlap_period = check_time_overlap(row_A["collated_start"], row_A["collated_end"],
                                                               row_B["collated_start"], row_B["collated_end"],)

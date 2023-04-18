@@ -12,7 +12,7 @@ import pyedflib
 
 from .utils.custom_print import print
 from .utils import constants
-from .utils.resampling import all_header_indicated_sample_rates
+#from .utils.resampling import all_header_indicated_sample_rates
 
 """
 def edf_collate_OLD(root, out):
@@ -268,6 +268,7 @@ def edf_collate(root, out):
     for file in unreadable_files:
         edf_files.remove(file)
 
+    """
     # use headers/signalheaders to pick a sample rate
     edf_sample_rates, sr_cutoff, sr_outlier_files = all_header_indicated_sample_rates(edf_headers)
     edf_sample_rate = edf_sample_rates[0]  # use most frequent as global sample rate
@@ -276,6 +277,7 @@ def edf_collate(root, out):
     # remove any files judged as outlier based on sample rate
     for file in sr_outlier_files:
         edf_files.remove(file)
+    """
 
     # sort edf_files by start date
     edf_files = sorted(edf_files, key=lambda x: edf_headers[x]["startdate"])
@@ -297,6 +299,7 @@ def edf_collate(root, out):
 
     # for each channel, get the number of files it appears in
     edf_channels_counts = {channel:np.sum(edf_channels_mtx.loc[channel]) for channel in edf_channels_superset}
+    # use this info to determine channels we will later exclude
     min_channel_count = len(edf_files) * 0.75
     excluded_channels = [channel for channel, count in edf_channels_counts.items() if count < min_channel_count]
     if len(excluded_channels) > 0:
@@ -304,7 +307,14 @@ def edf_collate(root, out):
                 excluded_channels, len(edf_files),
                 [edf_channels_counts[channel] for channel in excluded_channels], min_channel_count),
             enabled=constants.VERBOSE)
-    # TODO exclude (set to NaN in collation matrix)
+    edf_channels_superset = [ch for ch in edf_channels_superset if ch not in excluded_channels]
+
+    # create dict of {file -> {channel -> sample_rate}}
+    edf_channel_sample_rates = {}
+    for file, header in edf_headers.items():
+        edf_channel_sample_rates[file] = {}
+        for sig_header in header["SignalHeaders"]:
+            edf_channel_sample_rates[file][sig_header["label"]] = sig_header["sample_rate"]
 
     # using headers, collect start/end times for each file
     edf_intervals = {}
@@ -321,13 +331,14 @@ def edf_collate(root, out):
     logicol_end_dt = max([interval[1] for interval in edf_intervals.values()])
     logicol_dur_dt = logicol_end_dt - logicol_start_dt
 
+    """
     logicol_start_samples = 0
     logicol_dur_samples = math.floor(logicol_dur_dt.total_seconds()) * edf_sample_rate
     logicol_end_samples = logicol_dur_samples
+    """
 
-
-    # work out where each file starts/ends (sample-wise) in the logical collation
-    # i.e, if we were to stitch the EDF files together into one, accounting for gaps, from which & to which samples
+    # work out where each file starts/ends (s) in the logical collation
+    # i.e, if we were to stitch the EDF files together into one, accounting for gaps, from which & to which second
     #   would each file occupy, not yet assuming overlaps are possible
     logicol_file_intervals = {}
     for file, interval in edf_intervals.items():
@@ -335,17 +346,18 @@ def edf_collate(root, out):
         file_start_dt = interval[0]
         file_end_dt = interval[1]
         file_dur_dt = file_end_dt - file_start_dt
-        file_dur_samples = math.floor(file_dur_dt.total_seconds()) * edf_sample_rate
+        file_dur_s = file_dur_dt.total_seconds()
 
         logicol_file_start_dt = file_start_dt - logicol_start_dt
         # how far, in s, is file start time from logicol start?
-        logicol_file_start_samples = math.floor(logicol_file_start_dt.total_seconds()) * edf_sample_rate
+        logicol_file_start_s = logicol_file_start_dt.total_seconds()
+        logicol_file_end_s = logicol_file_start_s + file_dur_s
 
-        # logicol_file_end_s = logicol_end_dt - file_end_dt
-        # logicol_file_end_samples = logicol_file_end_s * edf_sample_rate
-        logicol_file_end_samples = logicol_file_start_samples + file_dur_samples
+        # convert to int
+        logicol_file_start_s = int(np.floor(logicol_file_start_s))
+        logicol_file_end_s = int(np.floor(logicol_file_end_s))
 
-        logicol_file_intervals[file] = (logicol_file_start_samples, logicol_file_end_samples)
+        logicol_file_intervals[file] = (logicol_file_start_s, logicol_file_end_s)
 
 
     # for each file, logical collation position for each channel (so same as logicol intervals, but greater resolution)
@@ -369,7 +381,7 @@ def edf_collate(root, out):
 
                 # this remains the same, regardless of whether we adjust channel for overlaps.
                 # length of this channel data as-is, if we turned it into an array
-                "channel_length":   logicol_file_intervals[file][1] - logicol_file_intervals[file][0]
+                "channel_duration":   logicol_file_intervals[file][1] - logicol_file_intervals[file][0]
             }
 
 
@@ -384,7 +396,8 @@ def edf_collate(root, out):
         "channel":          None,  # what channel are we looking at?
         "collated_start":   None,  # what index in collated file does this channel start at?
         "collated_end":     None,
-        "channel_length":   None,  # what is the length of this channel, regardless of whether we trim it for overlaps?
+        "channel_duration":   None,  # what is the length of this channel, regardless of whether we trim it for overlaps?
+        "channel_sample_rate": None,
     }
     for file, channels in logicol_channel_intervals.items():
 
@@ -398,21 +411,28 @@ def edf_collate(root, out):
             channel_entry["channel"] = channel
             channel_entry["collated_start"] = channel_details["collated_start"]
             channel_entry["collated_end"] = channel_details["collated_end"]
-            channel_entry["channel_length"] = channel_details["channel_length"]
+            channel_entry["channel_duration"] = channel_details["channel_duration"]
+            channel_entry["channel_sample_rate"] = edf_channel_sample_rates[file][channel]
 
             logicol_mtx_entries.append(channel_entry)
 
+    # convert to mtx
     logicol_mtx = pd.DataFrame([entry for entry in logicol_mtx_entries])
+
+    # remove excluded channels
+    logicol_mtx = logicol_mtx[~logicol_mtx["channel"].isin(excluded_channels)]
+
+    # save to csv
     logicol_mtx.to_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_CHECK_FILENAME), index_label="index")
 
-    # save details like root dir and sample rate to a details .json file, for use by other scripts
+    # save details like root dir and channels list to a details .json file, for use by other scripts
     with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "w") as details_file:
         details = {
             "root": root,
-            "sample_rate": int(edf_sample_rate),
             "channels_superset": edf_channels_superset,
         }
         json.dump(details, details_file)
+
 
     return logicol_mtx
 
