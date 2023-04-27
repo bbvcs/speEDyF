@@ -25,6 +25,3 @@
 
 # Analysis
     # mne-python
-
-# TODO generally
-    # not sure if working with 3 shifted test

@@ -645,34 +645,33 @@ def resolve(root, out):
 
         # read the overlapping data from both files
         # i.e, where does the overlap start/end within each file (in seconds, w.r.t start of each file (0))
-        match overlap["overlap_type"]:
 
-            # e.g:
-            # fa:   fa_start---------------->fa_end
-            # fb:              fb_start------------ ...
-            case OverlapType.PARTIAL_BOTH_ENDOF_A:
+        # e.g:
+        # fa:   fa_start---------------->fa_end
+        # fb:              fb_start------------ ...
+        if overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_A:
 
-                file_a_overlap_start = file_b_collated_start - file_a_collated_start
-                file_a_overlap_end = file_a_overlap_start + overlap_duration
+            file_a_overlap_start = file_b_collated_start - file_a_collated_start
+            file_a_overlap_end = file_a_overlap_start + overlap_duration
 
-                file_b_overlap_start = 0
-                file_b_overlap_end = file_b_overlap_start + overlap_duration
+            file_b_overlap_start = 0
+            file_b_overlap_end = file_b_overlap_start + overlap_duration
 
-            case OverlapType.PARTIAL_BOTH_ENDOF_B: # maybe impossible?
+        elif overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_B: # maybe impossible?
 
-                raise NotImplementedError
+            raise NotImplementedError
 
-            case OverlapType.ENTIRETY_FILE_A: # maybe impossible?
+        elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_A: # maybe impossible?
 
-                raise NotImplementedError
+            raise NotImplementedError
 
-            case OverlapType.ENTIRETY_FILE_B:
+        elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_B:
 
-                raise NotImplementedError
+            raise NotImplementedError
 
-            case OverlapType.ENTIRETY_BOTH_FILES:
+        elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
 
-                raise NotImplementedError
+            raise NotImplementedError
 
 
         file_a_sample_rate = file_a_logicol["channel_sample_rate"].item()
@@ -697,52 +696,48 @@ def resolve(root, out):
             # keep data of higher sample rate?
         if all(file_a_overlap_data == file_b_overlap_data):
 
-            match overlap["overlap_type"]:
+            if overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_A:
+                
+                # trim the overlapping data from the end of the channel in file A
+                logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
 
-                case OverlapType.PARTIAL_BOTH_ENDOF_A:
+            elif overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_B:
 
-                    # trim the overlapping data from the end of the channel in file A
-                    logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
+                raise NotImplementedError
 
-                case OverlapType.PARTIAL_BOTH_ENDOF_B:
+            elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_A:
 
-                    raise NotImplementedError
+                raise NotImplementedError
 
-                case OverlapType.ENTIRETY_FILE_A:
+            elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_B:
 
-                    raise NotImplementedError
+                raise NotImplementedError
 
-                case OverlapType.ENTIRETY_FILE_B:
+            elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
 
-                    raise NotImplementedError
-
-                case OverlapType.ENTIRETY_BOTH_FILES:
-
-                    raise NotImplementedError
+                raise NotImplementedError
 
         else:  # data isn't the same; more problematic
 
-            match overlap["overlap_type"]:
+            if overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_A:
 
-                case OverlapType.PARTIAL_BOTH_ENDOF_A:
+                raise NotImplementedError
 
-                    raise NotImplementedError
+            elif overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_B:
 
-                case OverlapType.PARTIAL_BOTH_ENDOF_B:
+                raise NotImplementedError
 
-                    raise NotImplementedError
+            elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_A:
 
-                case OverlapType.ENTIRETY_FILE_A:
+                raise NotImplementedError
 
-                    raise NotImplementedError
+            elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_B:
 
-                case OverlapType.ENTIRETY_FILE_B:
+                raise NotImplementedError
 
-                    raise NotImplementedError
+            elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
 
-                case OverlapType.ENTIRETY_BOTH_FILES:
-
-                    raise NotImplementedError
+                raise NotImplementedError
 
     # save trimmed logicol_mtx to csv
     logicol_mtx_trimmed.to_csv(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME), index_label="index")
