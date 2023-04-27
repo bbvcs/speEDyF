@@ -19,12 +19,9 @@ class EDF_Segment:
 
     def __init__(self, data: pd.DataFrame, sample_rate: float, idx: int = None):
 
-        self.__data = data
-
+        self.data = data
         self.sample_rate = sample_rate
-
-    def data(self):
-        return self.__data
+        self.idx = idx
 
 
 class EDF_Segmenter:
@@ -297,7 +294,7 @@ class EDF_Segmenter:
 
         # convert to DataFrame
         columns = self.edf_channels_superset if channels == "all" else channels
-        segment_data = pd.DataFrame(np.transpose(segment_data), columns=columns).T
+        segment_data = pd.DataFrame(np.transpose(segment_data), columns=columns)
 
         return EDF_Segment(data=segment_data, idx=idx, sample_rate = segment_sample_rate)
 
