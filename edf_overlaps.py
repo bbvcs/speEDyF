@@ -277,7 +277,7 @@ def resolve(root, out):
 
 
     # first, check if we actually have any overlaps to resolve
-    overlaps = check(root, out, mtx=logicol_mtx)
+    overlaps = check(root, out, mtx=logicol_mtx, verbose=False)
 
     if len(overlaps) == 0:
         print("edf_overlaps.resolve: No overlaps found to be present, no further action will be taken.", enabled=True)
@@ -305,16 +305,11 @@ def resolve(root, out):
     # loop terminates when all overlaps resolved
     while True:
 
-        overlaps = check(root, out, mtx=logicol_mtx_trimmed)
-
         if len(overlaps) == 0:
             break
 
         # print progress
-        if (len(overlaps) >= 100 and len(overlaps) % 100 == 0) \
-            or (len(overlaps) >= 10 and len(overlaps) % 10 == 0) \
-                or (len(overlaps) < 10):
-                    print(f"edf_overlaps.resolve: {len(overlaps)} overlaps left to resolve.", enabled=constants.VERBOSE)
+        print(f"\redf_overlaps.resolve: {len(overlaps)} overlaps left to resolve.", end="", enabled=constants.VERBOSE)
 
         # resolve first overlap, then re-call check_overlaps; if resolved, it will not be present, and we move on to next
         overlap = overlaps[0]
@@ -433,6 +428,9 @@ def resolve(root, out):
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
 
                 raise NotImplementedError
+
+        # we've fixed an overlap, so re-generate
+        overlaps = check(root, out, mtx=logicol_mtx_trimmed, verbose=False)
 
     # save trimmed logicol_mtx to csv
     logicol_mtx_trimmed.to_csv(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME), index_label="index")
