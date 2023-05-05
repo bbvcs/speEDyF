@@ -14,6 +14,7 @@
     # more overlap conditions
 
     # test whether subject with files of differing sample rate is OK
+        # and channels of differing sample rates within same file/segment!
 
     # take hash of filesystem under root directory
         # so can tell if changed and program won't work anymore

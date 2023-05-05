@@ -12,7 +12,7 @@ import pyedflib
 from .utils.custom_print import print
 from .utils import constants
 
-def edf_collate(root, out):
+def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32):
     """ Produce a matrix representation of a chronologically ordered collection of EDF files.
 
     Given a root directory, find all EDF files present in the directory and any subdirectories.
@@ -93,6 +93,7 @@ def edf_collate(root, out):
     edf_channels_mtx = pd.DataFrame(edf_channels_ndarray, index=edf_channels_superset, columns=edf_files, dtype=np.int8)
     edf_channels_mtx.to_csv(os.path.join(out, constants.CHANNEL_PRESENCE_MATRIX_FILENAME), index_label="index")
 
+    """
     # for each channel, get the number of files it appears in
     edf_channels_counts = {channel:np.sum(edf_channels_mtx.loc[channel]) for channel in edf_channels_superset}
     # use this info to determine channels we will later exclude
@@ -104,13 +105,19 @@ def edf_collate(root, out):
                 [edf_channels_counts[channel] for channel in excluded_channels], min_channel_count),
             enabled=constants.VERBOSE)
     edf_channels_superset = [ch for ch in edf_channels_superset if ch not in excluded_channels]
+    """
 
     # create dict of {file -> {channel -> sample_rate}}
     edf_channel_sample_rates = {}
     for file, header in edf_headers.items():
         edf_channel_sample_rates[file] = {}
         for sig_header in header["SignalHeaders"]:
-            edf_channel_sample_rates[file][sig_header["label"]] = sig_header["sample_rate"]
+            channel = sig_header["label"]
+            sample_rate = sig_header["sample_rate"]
+
+            edf_channel_sample_rates[file][channel] = sample_rate
+
+
 
     # using headers, collect start/end times for each file
     edf_intervals = {}
@@ -215,8 +222,18 @@ def edf_collate(root, out):
     # convert to mtx
     logicol_mtx = pd.DataFrame([entry for entry in logicol_mtx_entries])
 
-    # remove excluded channels
-    logicol_mtx = logicol_mtx[~logicol_mtx["channel"].isin(excluded_channels)]
+
+    excluded_channels = logicol_mtx[logicol_mtx["channel_sample_rate"] < minimum_edf_channel_sample_rate_hz]
+    excluded_channels_filename = os.path.join(out, constants.EXCLUDED_CHANNELS_LIST_FILENAME)
+    if len(excluded_channels) > 0:
+        excluded_channels.to_csv(excluded_channels_filename)
+        print(f"edf_collate: {len(excluded_channels)} channels (names: {pd.unique(excluded_channels['channel'])}) have "
+              f"been excluded, as their sample rates were below specified minimum {minimum_edf_channel_sample_rate_hz} Hz. "
+              f"Full details can be found in {excluded_channels_filename}.", enabled=constants.VERBOSE)
+
+    # remove channels below user-defined minimum sample rate
+    logicol_mtx = logicol_mtx[logicol_mtx["channel_sample_rate"] >= minimum_edf_channel_sample_rate_hz]
+    edf_channels_superset = list(pd.unique(logicol_mtx["channel"])) # update channels superset accordingly
 
     # save to csv
     logicol_mtx.to_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME), index_label="index")
