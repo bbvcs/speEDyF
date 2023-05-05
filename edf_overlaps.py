@@ -252,6 +252,8 @@ def check(root, out, mtx=None, verbose=constants.VERBOSE):
 
 def resolve(root, out):
 
+    print("edf_overlaps.resolve: Resolving overlaps ... ", enabled=constants.VERBOSE)
+
     # logicol_mtx holds information on where channels start/end in logical collation, though overlaps may be present
     try:
         logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME),
@@ -280,7 +282,7 @@ def resolve(root, out):
     overlaps = check(root, out, mtx=logicol_mtx, verbose=False)
 
     if len(overlaps) == 0:
-        print("edf_overlaps.resolve: No overlaps found to be present, no further action will be taken.", enabled=True)
+        print("edf_overlaps.resolve: No overlaps found to be present, no further action will be taken.", enabled=constants.VERBOSE)
         return
 
     # we will trim overlaps from this mtx in this method, if there are any
