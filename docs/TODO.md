@@ -8,7 +8,7 @@
     # 895 - channels g14 vs G14?
     # find the canine data and run it on that
     # standardise output; like how overlap.resolve.check output their names
-    
+    # convert all prints to use verbose=constants.VERBOSE, allow this var to be set as param
 
 # Major things left TODO
     # more overlap conditions

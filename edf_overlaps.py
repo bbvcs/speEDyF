@@ -148,7 +148,9 @@ def interval_plot(interval_list):
 
 
 
-def check(root, out, mtx=None, verbose=False):
+def check(root, out, mtx=None, verbose=constants.VERBOSE):
+
+    print("edf_overlaps.check: Checking for overlaps ... ", enabled=verbose)
 
     # create a data structure to hold information about an overlap
     overlap_mtx_entries = []
@@ -180,7 +182,7 @@ def check(root, out, mtx=None, verbose=False):
         try:
             logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME),
                                       index_col="index")
-            print("edf_overlaps.check: Overlap-trimmed Logicol Matrix found and successfully loaded", enabled=True)
+            print("edf_overlaps.check: Overlap-trimmed Logicol Matrix found and successfully loaded", enabled=verbose)
 
         except FileNotFoundError:
 
@@ -234,16 +236,16 @@ def check(root, out, mtx=None, verbose=False):
     if verbose:
         n_overlaps = overlap_mtx.shape[0]
         if n_overlaps == 0:
-            print("edf_overlaps.check: No overlaps detected.", enabled=True)
+            print("edf_overlaps.check: No overlaps detected.", enabled=verbose)
         else:
             n_overlapping_channels = len(pd.unique(overlap_mtx["channel"]))
             n_channels_total = len(pd.unique(logicol_mtx["channel"]))
 
             n_overlapping_files = overlap_mtx.groupby(["file_A", "file_B"]).ngroups
             n_files_total = len(pd.unique(logicol_mtx["file"]))
-            print(f"edf_overlaps.check: {n_overlaps} overlapping channels ({n_overlapping_channels}/{n_channels_total} unique channels total) across {n_overlapping_files}/{n_files_total} pairs of files!", enabled=True)
-            print("\n", enabled=True)
-            print(pd.DataFrame([overlap["overlap_type"] for overlap in overlap_mtx_entries]).value_counts(), enabled=True)
+            print(f"edf_overlaps.check: {n_overlaps} overlapping channels ({n_overlapping_channels}/{n_channels_total} unique channels total) across {n_overlapping_files}/{n_files_total} pairs of files!", enabled=verbose)
+            print("\n", enabled=verbose)
+            #print(pd.DataFrame([overlap["overlap_type"] for overlap in overlap_mtx_entries]).value_counts(), enabled=True)
 
     return overlap_mtx_entries
 
