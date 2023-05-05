@@ -2,6 +2,7 @@ import datetime
 import enum
 import os
 import itertools
+import sys
 
 import numpy as np
 import pandas as pd
@@ -34,60 +35,6 @@ class OverlapType(enum.Enum):
     # fb:  fb_start----------------->fb_end
     ENTIRETY_BOTH_FILES = 6
 
-class ResolutionMatrixEntry():
-
-    def __init__(self, pair_index: int, channel: str, file_a: str, file_b: str,
-                       file_a_start: int,	file_a_end: int, file_a_length: int,
-                       file_b_start: int,	file_b_end: int, file_b_length: int,
-                       #overlap_start: int,	overlap_end: int,
-                       overlap_length: int, overlap_type: OverlapType,
-                       action: str, data_loss: int):
-
-        self.pair_index = pair_index     # each pair of overlapping files with have unique index, shared across multiple ResolutionMatrixEntry instances
-        self.channel = channel # each common channel has its own ResolutionMatrixEntry
-        self.file_a = file_a
-        self.file_b = file_b
-
-        self.file_a_start = file_a_start   # when collating, where in the file we shuold read from
-        self.file_a_end = file_a_end       # and where to (e.g could be shorter as we omit omit overlapping bit)
-        self.file_a_length = file_a_length # number of datapoints in channels in file
-
-        self.file_b_start = file_b_start
-        self.file_b_end = file_b_end
-        self.file_b_length = file_b_length
-
-        #self.overlap_start = overlap_start
-        #self.overlap_end = overlap_end
-        self.overlap_length = overlap_length
-        self.overlap_type = overlap_type
-
-        #self.common_channels = common_channels
-        self.action = action
-        self.data_loss = data_loss # if we've had to omit data, how many datapoints have been lost?
-
-
-    def as_dict(self):
-        return {
-            "pair_index": self.pair_index,
-            "channel": self.channel,
-            "file_a": self.file_a,
-            "file_b": self.file_b,
-
-            "file_a_start": self.file_a_start,
-            "file_a_end": self.file_a_end,
-            "file_a_length": self.file_a_length,
-
-            "file_b_start": self.file_b_start,
-            "file_b_end": self.file_b_end,
-            "file_b_length": self.file_b_length,
-
-
-            "overlap_length": self.overlap_length,
-            "overlap_type": self.overlap_type,
-
-            "action": self.action,
-            "data_loss": self.data_loss,
-        }
 
 def check_time_overlap(t1_start, t1_end, t2_start, t2_end):
     """
@@ -187,312 +134,10 @@ def check_channel_overlap(file_a_header, file_b_header):
 
     return [common_channels, file_a_unique_channels, file_b_unique_channels]
 
-"""
-def resolve_overlap_OLD(overlapping_pair_count, resolution_mtx_entries: list[ResolutionMatrixEntry], j, hz, channel_check_results,
-                        file_a_path, file_a_header,
-                        file_b_path, file_b_header,
-                        overlap_type: OverlapType, overlap_period):
-
-    common_channels = channel_check_results[0]
-    file_a_unique_channels = channel_check_results[1]
-    file_b_unique_channels = channel_check_results[2]
-
-    file_a_channel_idxs = {channel:i for i, channel in enumerate(file_a_header["channels"])}
-    file_b_channel_idxs = {channel:i for i, channel in enumerate(file_b_header["channels"])}
-
-    overlap_start = overlap_period[0]
-    overlap_end = overlap_period[1]
-    overlap_duration = overlap_period[2]
-    overlap_length = overlap_duration.seconds * hz
-
-    file_a = pyedflib.EdfReader(file_a_path, 0, 1)
-    file_b = pyedflib.EdfReader(file_b_path, 0, 1)
-
-
-
-    for channel in common_channels:
-
-        match overlap_type:
-
-            case overlap_type.PARTIAL_BOTH_FILES:
-
-                file_a_start = file_a_header["startdate"]
-                file_a_end = file_a_header["startdate"] + datetime.timedelta(seconds=file_a_header["Duration"])
-                file_a_length = file_a_header["Duration"] * hz
-
-                file_b_start = file_b_header["startdate"]
-                file_b_end = file_b_header["startdate"] + datetime.timedelta(seconds=file_b_header["Duration"])
-                file_b_length = file_b_header["Duration"] * hz
-
-                # get the idx within EDF rows where overlap begins in each file
-                file_a_overlap_start = 0 + abs(file_a_start - overlap_start).seconds * hz
-                file_b_overlap_start = 0 + abs(file_b_start - overlap_start).seconds * hz
-
-                # get the overlapping data from both channels
-                file_a_data = file_a.readSignal(file_a_channel_idxs[channel], start=file_a_overlap_start, n=overlap_length)
-                file_b_data = file_b.readSignal(file_b_channel_idxs[channel], start=file_b_overlap_start, n=overlap_length)
-
-                print("TEMP MAKE ALL CHANELS EQUAL, REMOVE ME!")#, enabled=True)
-                file_a_data = np.zeros(shape=file_a_data.shape)
-                file_b_data = np.zeros(shape=file_b_data.shape)
-
-                # timevec = pd.date_range(overlap_start, overlap_end, overlap_length)
-                # plt.plot(timevec, file_a_data, alpha=0.4)
-                # plt.plot(timevec, file_b_data, alpha=0.4)
-                # plt.legend([file_a_path, file_b_path])
-                # plt.title(f"Overlap Duration (min:sec:ms): {overlap_duration}")
-                # plt.ylabel("Physical Value")
-                # plt.xlabel("Recording Time\nWARNING: Times are approximate and are for debugging purposes only.")
-                # plt.show()
-                # plt.clf()
-                
-                if all(file_a_data == file_b_data):
-                    # data is the same in parts of either file, so we can remove the overlapping bit from one file
-
-                    # as it is partial overlap, we know:
-                        # neither file is compeltely overlapping
-                        #
-
-                    # additionally, as they are sorted prior to this algorithm, we know file_a must start first
-                    # (if both start at the same time, but one finishes first, that is NOT PARTIAL)
-                    # arbitrarily, keep the overlapping data in a, so read all of A
-                    # and remove the overlapping bit from B, so read B from the point where the overlap finishes.
-
-                    #edf_channel_intervals[file_b][channel] =
-
-                    resolution_mtx_entry = ResolutionMatrixEntry(
-                        pair_index=overlapping_pair_count,
-                        channel=channel,
-                        file_a=file_a_path,
-                        file_b=file_b_path,
-
-                        file_a_start = 0,
-                        file_a_end = file_a_length,
-                        file_a_length = file_a_length,
-
-                        file_b_start = 0 + overlap_length,
-                        file_b_end = file_b_length,
-                        file_b_length = file_b_length,
-
-                        overlap_length=overlap_length,
-                        overlap_type=overlap_type,
-
-                        action="Partial and Identical Overlap - Overlapping data removed (omitted) from File B",
-                        data_loss=0  # we haven't lost any data, as only omitted data present in another file
-                    )
-
-                    resolution_mtx_entries.append(resolution_mtx_entry)
-
-
-                else:
-                    raise NotImplementedError
-
-
-            case overlap_type.ENTIRETY_FILE_A:
-                raise NotImplementedError
-
-            case overlap_type.ENTIRETY_FILE_B:
-                raise NotImplementedError
-
-            case overlap_type.ENTIRETY_BOTH_FILES:
-
-                file_a_data = file_a.readSignal(file_a_channel_idxs[channel])
-                file_b_data = file_b.readSignal(file_b_channel_idxs[channel])
-
-                if all(file_a_data == file_b_data):
-
-                    # data is the same and the files overlap entirely; we can just completely remove all of one.
-                    resolution_mtx_entry = ResolutionMatrixEntry(
-                        pair_index = overlapping_pair_count,
-                        channel = channel,
-                        file_a = file_a_path,
-                        file_b = file_b_path,
-
-                        file_a_start = 0,
-                        file_a_end  = 0,  # read none of A
-                        file_a_length = file_a_header["Duration"] * hz,
-
-                        file_b_start = 0,
-                        file_b_end = file_b_header["Duration"] * hz,  # read all of B
-                        file_b_length = file_b_header["Duration"] * hz,
-
-                        overlap_length = overlap_length,
-                        overlap_type = overlap_type,
-
-                        action = "Exact and Identical Overlap - File A arbitrarily removed (completely omitted)",
-                        data_loss = 0  # we haven't lost any data, as only omitted data present in another file
-                    )
-
-                    resolution_mtx_entries.append(resolution_mtx_entry)
-
-                else:
-                    # now we have problem of which to keep.
-                    # firstly, we check the signal content of both as before
-                    # maybe one appears to be noise/empty of any content? and other file appears OK? If so, keep other
-                    # maybe both appear to be noise/empty, so omit both
-                    # if they both appear valid, for now omit both.
-                    # TODO
-
-                    raise NotImplementedError
-    file_a.close()
-    file_b.close()
-
-
-def resolve_overlap(overlapping_pair_count, resolution_mtx_entries: list[ResolutionMatrixEntry], edf_channel_intervals, hz,
-                    channel_label, channel_file_a_interval, channel_file_b_interval,
-                    file_a_path, file_a_header,
-                    file_b_path, file_b_header,
-                    overlap_type: OverlapType, overlap_period):
-
-
-    file_a_channel_idxs = {channel: i for i, channel in enumerate(file_a_header["channels"])}
-    file_b_channel_idxs = {channel: i for i, channel in enumerate(file_b_header["channels"])}
-
-    overlap_start = overlap_period[0]
-    overlap_end = overlap_period[1]
-    overlap_duration = overlap_period[2]
-    overlap_length = overlap_duration.seconds * hz
-
-    # within the lists of intervals for the channel in files a and b, what is index of this interval? (probably 0)
-    channel_file_a_interval_idx = edf_channel_intervals[file_a_path][channel_label].index(channel_file_a_interval)
-    channel_file_b_interval_idx = edf_channel_intervals[file_b_path][channel_label].index(channel_file_b_interval)
-
-    file_a = pyedflib.EdfReader(file_a_path, 0, 1)
-    file_b = pyedflib.EdfReader(file_b_path, 0, 1)
-
-    match overlap_type:
-
-        case overlap_type.PARTIAL_BOTH_FILES:
-
-            file_a_start = file_a_header["startdate"]
-            file_a_end = file_a_header["startdate"] + datetime.timedelta(seconds=file_a_header["Duration"])
-            file_a_length = file_a_header["Duration"] * hz
-
-            file_b_start = file_b_header["startdate"]
-            file_b_end = file_b_header["startdate"] + datetime.timedelta(seconds=file_b_header["Duration"])
-            file_b_length = file_b_header["Duration"] * hz
-
-            # get the idx within EDF rows where overlap begins in each file
-            file_a_overlap_start = 0 + abs(file_a_start - overlap_start).seconds * hz
-            file_b_overlap_start = 0 + abs(file_b_start - overlap_start).seconds * hz
-
-            # get the overlapping data from both channels
-            file_a_data = file_a.readSignal(file_a_channel_idxs[channel_label], start=file_a_overlap_start,
-                                            n=overlap_length)
-            file_b_data = file_b.readSignal(file_b_channel_idxs[channel_label], start=file_b_overlap_start,
-                                            n=overlap_length)
-
-            print("TEMP MAKE ALL CHANELS EQUAL, REMOVE ME!")  # , enabled=True)
-            file_a_data = np.zeros(shape=file_a_data.shape)
-            file_b_data = np.zeros(shape=file_b_data.shape)
-
-            # timevec = pd.date_range(overlap_start, overlap_end, overlap_length)
-            # plt.plot(timevec, file_a_data, alpha=0.4)
-            # plt.plot(timevec, file_b_data, alpha=0.4)
-            # plt.legend([file_a_path, file_b_path])
-            # plt.title(f"Overlap Duration (min:sec:ms): {overlap_duration}")
-            # plt.ylabel("Physical Value")
-            # plt.xlabel("Recording Time\nWARNING: Times are approximate and are for debugging purposes only.")
-            # plt.show()
-            # plt.clf()
-
-            if all(file_a_data == file_b_data):
-                # data is the same in parts of either file, so we can remove the overlapping bit from one file
-
-                # as it is partial overlap, we know:
-                    # neither file is compeltely overlapping
-
-                # additionally, as they are sorted prior to this algorithm, we know file_a must start first
-                # (if both start at the same time, but one finishes first, that is NOT partial)
-                # arbitrarily, keep the overlapping data in a, so read all of A
-                # and remove the overlapping bit from B, so read B from the point where the overlap finishes.
-
-                # REPLACE the interval
-                edf_channel_intervals[file_b_path][channel_label][channel_file_b_interval_idx] = (overlap_end, channel_file_b_interval[1])
-
-
-                #
-                # resolution_mtx_entry = ResolutionMatrixEntry(
-                #     pair_index=overlapping_pair_count,
-                #     channel=channel,
-                #     file_a=file_a_path,
-                #     file_b=file_b_path,
-                #
-                #     file_a_start=0,
-                #     file_a_end=file_a_length,
-                #     file_a_length=file_a_length,
-                #
-                #     file_b_start=0 + overlap_length,
-                #     file_b_end=file_b_length,
-                #     file_b_length=file_b_length,
-                #
-                #     overlap_length=overlap_length,
-                #     overlap_type=overlap_type,
-                #
-                #     action="Partial and Identical Overlap - Overlapping data removed (omitted) from File B",
-                #     data_loss=0  # we haven't lost any data, as only omitted data present in another file
-                # )
-                #
-                # resolution_mtx_entries.append(resolution_mtx_entry)
-                #
-
-            else:
-                raise NotImplementedError
-
-        case overlap_type.ENTIRETY_FILE_A:
-            raise NotImplementedError
-
-        case overlap_type.ENTIRETY_FILE_B:
-            raise NotImplementedError
-
-        case overlap_type.ENTIRETY_BOTH_FILES:
-
-            file_a_data = file_a.readSignal(file_a_channel_idxs[channel_label])
-            file_b_data = file_b.readSignal(file_b_channel_idxs[channel_label])
-
-            if all(file_a_data == file_b_data):
-            #
-            #     # data is the same and the files overlap entirely; we can just completely remove all of one.
-            #     resolution_mtx_entry = ResolutionMatrixEntry(
-            #         pair_index=overlapping_pair_count,
-            #         channel=channel,
-            #         file_a=file_a_path,
-            #         file_b=file_b_path,
-            #
-            #         file_a_start=0,
-            #         file_a_end=0,  # read none of A
-            #         file_a_length=file_a_header["Duration"] * hz,
-            #
-            #         file_b_start=0,
-            #         file_b_end=file_b_header["Duration"] * hz,  # read all of B
-            #         file_b_length=file_b_header["Duration"] * hz,
-            #
-            #         overlap_length=overlap_length,
-            #         overlap_type=overlap_type,
-            #
-            #         action="Exact and Identical Overlap - File A arbitrarily removed (completely omitted)",
-            #         data_loss=0  # we haven't lost any data, as only omitted data present in another file
-            #     )
-            #
-            #     resolution_mtx_entries.append(resolution_mtx_entry)
-                raise NotImplementedError
-            else:
-                # now we have problem of which to keep.
-                # firstly, we check the signal content of both as before
-                # maybe one appears to be noise/empty of any content? and other file appears OK? If so, keep other
-                # maybe both appear to be noise/empty, so omit both
-                # if they both appear valid, for now omit both.
-                # TODO
-
-                raise NotImplementedError
-    file_a.close()
-    file_b.close()
-"""
 
 def interval_plot(interval_list):
 
     fig, ax = plt.subplots()
-
 
     for i in range(0, len(interval_list)):
         start = interval_list[i][0]
@@ -520,15 +165,35 @@ def check(root, out, mtx=None, verbose=False):
     }
 
 
-    logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME), index_col="index")
-
     # edf_check_overlap will provide an overlap-adjusted mtx we should use instead
     if isinstance(mtx, pd.DataFrame):
-        # try to ensure mtx is of correct format
+
+        # try to ensure provided mtx is of correct format
+        logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME),
+                                  index_col="index")
         if list(mtx.columns) == list(logicol_mtx.columns):
             logicol_mtx = mtx
         else:
-            raise TypeError("Matrix provided does not appear to be similar to logicol_mtx")
+            raise TypeError("edf_overlaps.check: Matrix provided does not appear to be similar to logicol_mtx")
+    else:
+
+        try:
+            logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME),
+                                      index_col="index")
+            print("edf_overlaps.check: Overlap-trimmed Logicol Matrix found and successfully loaded", enabled=True)
+
+        except FileNotFoundError:
+
+            try:
+                logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME),
+                                          index_col="index")
+
+            except FileNotFoundError:
+                print(
+                    f"edf_overlaps.check: Warning: Logicol Matrix could not be found in {out} - have you run edf_collate?",
+                    enabled=True)
+                sys.exit(os.EX_NOINPUT)
+
 
     all_channels = pd.unique(logicol_mtx["channel"])
 
@@ -569,14 +234,14 @@ def check(root, out, mtx=None, verbose=False):
     if verbose:
         n_overlaps = overlap_mtx.shape[0]
         if n_overlaps == 0:
-            print("No overlaps detected.", enabled=True)
+            print("edf_overlaps.check: No overlaps detected.", enabled=True)
         else:
             n_overlapping_channels = len(pd.unique(overlap_mtx["channel"]))
             n_channels_total = len(pd.unique(logicol_mtx["channel"]))
 
             n_overlapping_files = overlap_mtx.groupby(["file_A", "file_B"]).ngroups
             n_files_total = len(pd.unique(logicol_mtx["file"]))
-            print(f"{n_overlaps} overlapping channels ({n_overlapping_channels}/{n_channels_total} unique channels total) across {n_overlapping_files}/{n_files_total} pairs of files!", enabled=True)
+            print(f"edf_overlaps.check: {n_overlaps} overlapping channels ({n_overlapping_channels}/{n_channels_total} unique channels total) across {n_overlapping_files}/{n_files_total} pairs of files!", enabled=True)
             print("\n", enabled=True)
             print(pd.DataFrame([overlap["overlap_type"] for overlap in overlap_mtx_entries]).value_counts(), enabled=True)
 
@@ -586,7 +251,35 @@ def check(root, out, mtx=None, verbose=False):
 def resolve(root, out):
 
     # logicol_mtx holds information on where channels start/end in logical collation, though overlaps may be present
-    logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME), index_col="index")
+    try:
+        logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME),
+                                       index_col="index")
+        print(
+            f"edf_overlaps.resolve: Warning: Overlap-trimmed Logicol Matrix already found in {out} - it is unlikely you need to re-run this program again.\n"
+            f"edf_overlaps.resolve: Continue anyway (re-generate trimmed Logicol Matrix)? (y/n)", enabled=True)
+        if str(input("> ")).lower() == "y":
+            logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME),
+                                      index_col="index")
+        else:
+            return
+
+    except FileNotFoundError:
+
+        try:
+            logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME), index_col="index")
+
+        except FileNotFoundError:
+            print(f"edf_overlaps.resolve: Warning: Logicol Matrix could not be found in {out} - have you run edf_collate?", enabled=True)
+            sys.exit(os.EX_NOINPUT)
+
+
+
+    # first, check if we actually have any overlaps to resolve
+    overlaps = check(root, out, mtx=logicol_mtx)
+
+    if len(overlaps) == 0:
+        print("edf_overlaps.resolve: No overlaps found to be present, no further action will be taken.", enabled=True)
+        return
 
     # we will trim overlaps from this mtx in this method, if there are any
     logicol_mtx_trimmed = logicol_mtx.copy()
@@ -619,7 +312,7 @@ def resolve(root, out):
         if (len(overlaps) >= 100 and len(overlaps) % 100 == 0) \
             or (len(overlaps) >= 10 and len(overlaps) % 10 == 0) \
                 or (len(overlaps) < 10):
-                    print(f"{len(overlaps)} overlaps left to resolve.", enabled=constants.VERBOSE)
+                    print(f"edf_overlaps.resolve: {len(overlaps)} overlaps left to resolve.", enabled=constants.VERBOSE)
 
         # resolve first overlap, then re-call check_overlaps; if resolved, it will not be present, and we move on to next
         overlap = overlaps[0]

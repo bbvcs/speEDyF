@@ -3,6 +3,7 @@ import sys
 import datetime
 import math
 import json
+import gc
 
 import numpy as np
 import pandas as pd
@@ -44,20 +45,17 @@ class EDFSegmenter:
         self.cache = {}
         self.cache_lifetime = cache_lifetime
 
-        # logicol_mtx holds information on where channels start/end in logical collation, though overlaps may be present
-        self.logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME), index_col="index")
-
         try:
             self.logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME), index_col="index")
-            print("Overlap-trimmed Logicol Matrix found and successfully loaded, enabled=True")
+            print("edf_segment: Overlap-trimmed Logicol Matrix found and successfully loaded", enabled=True)
 
         except FileNotFoundError:
 
             if len(check(root, out)) > 0:
-                print(f"Warning: Trimmed Logicol Matrix could not be found in {out}, and it appears there are overlaps in your data.\n"
-                      f"It is highly recommended that you run edf_overlaps.resolve(), to resolve these overlaps.\n"
-                      f"Continue anyway with overlaps present? (y/n)\n", enabled=True)
-                if str(input()).lower() != "y":
+                print(f"edf_segment: Warning: Trimmed Logicol Matrix could not be found in {out}, and it appears there are overlaps in your data.\n"
+                      f"edf_segment: It is highly recommended that you run edf_overlaps.resolve(), to resolve these overlaps.\n"
+                      f"edf_segment: Continue anyway with overlaps present? (y/n)", enabled=True)
+                if str(input("> ")).lower() != "y":
                     sys.exit(os.EX_NOINPUT)
 
             try:
@@ -65,7 +63,7 @@ class EDFSegmenter:
                                                index_col="index")
 
             except FileNotFoundError:
-                print(f"Warning: Logicol Matrix could not be found in {out} - have you run edf_collate?", enabled=True)
+                print(f"edf_segment: Warning: Logicol Matrix could not be found in {out} - have you run edf_collate?", enabled=True)
                 sys.exit(os.EX_NOINPUT)
 
         with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "r") as details_file:
@@ -73,7 +71,7 @@ class EDFSegmenter:
             self.__available_channels = details["channels_superset"]
 
         if use_channels != "all" and (not isinstance(use_channels, list) or any([type(ch) != str for ch in use_channels])):
-            raise TypeError("Please ensure 'use_channels' is either 'all' or a list of strings.")
+            raise TypeError("edf_segment: Please ensure 'use_channels' is either 'all' or a list of strings.")
         elif use_channels == "all":
             self.use_channels = self.__available_channels.copy()
         else:
@@ -163,7 +161,7 @@ class EDFSegmenter:
             for file in to_delete:
                 for channel in to_delete[file]:
                     del self.cache[file][channel]
-
+                    gc.collect()
 
     def get_segment(self, idx: int = None, collated_start: int  = None, collated_end: int = None):
         """ Get a segment via its index in the segments matrix, or a specific collated start & end.
@@ -325,7 +323,7 @@ class EDFSegmenter:
         segments = []
 
         if count and end_idx:
-            print("Warning: value set for both count and end_idx. count will be ignored.")
+            print("edf_segment: Warning: value set for both count and end_idx. count will be ignored.")
 
         if end_idx == None:
             if count:
@@ -334,7 +332,7 @@ class EDFSegmenter:
                 end_idx = self.get_max_segment_count()
 
         for i in range(start_idx, end_idx):
-            if verbose: print(f"{i-start_idx+1}/{end_idx-start_idx} (idx = {i})", enabled=True)
+            if verbose: print(f"edf_segment: {i-start_idx+1}/{end_idx-start_idx} (idx = {i})", enabled=True)
             segments.append(self.get_segment(idx=i))
 
         self.clear_cache()
