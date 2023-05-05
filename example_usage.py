@@ -1,23 +1,17 @@
 import time
 import sys
 
-sys.path.append("/home/bcsm/University/stage-4/MSc_Project/Scripts")
-from speedyf import edf_collate, edf_overlaps, edf_segment
+sys.path.append("/home/billy/MSc")
+from speEDyF import edf_collate, edf_overlaps, edf_segment
 
 
 if __name__ == "__main__":
 
     start = time.time()
 
-    # TODO: add argparse library, pass in root/out?
-    root = "/home/bcsm/University/stage-3/BSc_Project/program/code/FILES/INPUT_DATA/909"
-
-    # dir to save results for this run i.e matrix, overlap resolutions
-    out = "out/testing"
-
-    # subject = "909"
-    # root = "/home/.../data/{subject}"
-    # out = "out/{subject}"
+    subject = "909"
+    root = f"/data/UCLH/icEEG/{subject}"
+    out = f"out/{subject}"
 
     # produce collation matrix (saved as .csv to out)
     edf_collate(root, out)
