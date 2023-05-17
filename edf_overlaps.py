@@ -244,6 +244,17 @@ def check(root, out, mtx=None, verbose=constants.VERBOSE):
             n_overlapping_files = overlap_mtx.groupby(["file_A", "file_B"]).ngroups
             n_files_total = len(pd.unique(logicol_mtx["file"]))
             print(f"edf_overlaps.check: {n_overlaps} overlapping channels ({n_overlapping_channels}/{n_channels_total} unique channels total) across {n_overlapping_files}/{n_files_total} pairs of files!", enabled=verbose)
+
+
+            types = np.array([overlap["overlap_type"] for overlap in overlap_mtx_entries])
+            unique_types = []
+            for type in types:
+                if type not in unique_types:
+                    unique_types.append(type)
+            types_counts = dict(zip(unique_types, [np.sum(types == type) for type in unique_types]))
+            print(f"Unique overlap types: {[str(type) for type in unique_types]}", enabled=verbose)
+            for type, count in types_counts.items():
+                print(f"{str(type)}: {count} occurrences.", enabled=verbose)
             print("\n", enabled=verbose)
             #print(pd.DataFrame([overlap["overlap_type"] for overlap in overlap_mtx_entries]).value_counts(), enabled=True)
 
