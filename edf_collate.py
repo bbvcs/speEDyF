@@ -226,6 +226,8 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32):
     excluded_channels = logicol_mtx[logicol_mtx["channel_sample_rate"] < minimum_edf_channel_sample_rate_hz]
     excluded_channels_filename = os.path.join(out, constants.EXCLUDED_CHANNELS_LIST_FILENAME)
     if len(excluded_channels) > 0:
+        reasons = pd.Series(np.repeat(f"sample rate below specified minimum {minimum_edf_channel_sample_rate_hz} Hz", excluded_channels.shape[0]))
+        excluded_channels = excluded_channels.assign(reason=reasons.values)
         excluded_channels.to_csv(excluded_channels_filename)
         print(f"edf_collate: {len(excluded_channels)} channels (names: {pd.unique(excluded_channels['channel'])}) have "
               f"been excluded, as their sample rates were below specified minimum {minimum_edf_channel_sample_rate_hz} Hz. "
