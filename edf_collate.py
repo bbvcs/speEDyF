@@ -49,7 +49,7 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32, forced=False):
             pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME), index_col="index")
             print(
                 f"edf_collate: Warning: Logicol Matrix already found in {out}. If data in {root} hasn't changed, you are unlikely to need to run this program again.\n"
-                f"edf_collate: Continue anyway (re-generate Logicol Matrix)? (y/n)", enabled=True)
+                f"edf_collate: Re-generate Logicol Matrix? (y/n)", enabled=True)
             if str(input("> ")).lower() != "y":
                 return
         except FileNotFoundError:

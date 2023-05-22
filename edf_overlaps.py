@@ -332,7 +332,7 @@ def resolve(root, out):
     while True:
 
         if len(overlaps) == 0:
-            print(f"edf_overlaps.resolve: All overlaps resolved! See {os.path.join(out, constants.EXCLUDED_CHANNELS_LIST_FILENAME)} for info on channels omitted/trimmed. You won't need to run this again unless data in root dir changes.", enabled=constants.VERBOSE)
+            print(f"\nedf_overlaps.resolve: All overlaps resolved! See {os.path.join(out, constants.EXCLUDED_CHANNELS_LIST_FILENAME)} for info on channels omitted/trimmed. You won't need to run this again unless data in root dir changes.", enabled=constants.VERBOSE)
             break
 
         # print progress
@@ -414,7 +414,7 @@ def resolve(root, out):
         # TODO what about sample rates?
             # surely if differing sample rate, data wont be the same.
             # keep data of higher sample rate?
-        # TODO move open excluded_channels csv functionality into function, add excluded channels when data is identical
+
         if all(file_a_overlap_data == file_b_overlap_data):
 
             if overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_A:
@@ -466,9 +466,9 @@ def resolve(root, out):
                 logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
 
                 file_a_logicol_copy = file_a_logicol.copy()
-                file_a_logicol_copy["reason"] = f"REMOVED: Overlaps entirely with {file_b_logicol.index.item()}, but data is not the same."
+                file_a_logicol_copy["reason"] = f"*REMOVED: Overlaps entirely with {file_b_logicol.index.item()}, but data is not the same, so both channels removed."
                 file_b_logicol_copy = file_b_logicol.copy()
-                file_b_logicol_copy["reason"] = f"REMOVED: Overlaps entirely with {file_a_logicol.index.item()}, but data is not the same."
+                file_b_logicol_copy["reason"] = f"*REMOVED: Overlaps entirely with {file_a_logicol.index.item()}, but data is not the same, so both channels removed."
 
                 excluded_channels_filename = os.path.join(out, constants.EXCLUDED_CHANNELS_LIST_FILENAME)
                 try:
@@ -478,7 +478,7 @@ def resolve(root, out):
                     excluded_channels = pd.concat([file_a_logicol_copy, file_b_logicol_copy])
 
                 excluded_channels.to_csv(excluded_channels_filename, index_label="index")
-                print(f"edf_overlaps.resolve: Encountered overlap consisting entirely of both channels involved, but data not the same. Both channels omitted. See {excluded_channels_filename}. Manual correction recommended.", enabled=constants.VERBOSE)
+                print(f"edf_overlaps.resolve: Encountered overlap consisting entirely of both channels involved, but data not the same. Both channels omitted. See *REMOVED in {excluded_channels_filename}. Manual correction recommended.", enabled=constants.VERBOSE)
 
 
         # we've fixed an overlap, so re-generate
