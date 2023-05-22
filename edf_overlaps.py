@@ -260,6 +260,19 @@ def check(root, out, mtx=None, verbose=constants.VERBOSE):
 
     return overlap_mtx_entries
 
+def single_excluded_channel(out, excluded_channel, reason):
+    excluded_channels_filename = os.path.join(out, constants.EXCLUDED_CHANNELS_LIST_FILENAME)
+
+    excluded_channel_copy = excluded_channel.copy()
+    excluded_channel_copy["reason"] = reason
+
+    try:
+        excluded_channels = pd.read_csv(excluded_channels_filename, index_col="index")
+        excluded_channels = pd.concat([excluded_channels, excluded_channel_copy])
+    except FileNotFoundError:
+        excluded_channels = excluded_channel_copy
+
+    excluded_channels.to_csv(excluded_channels_filename, index_label="index")
 
 def resolve(root, out):
 
@@ -319,6 +332,7 @@ def resolve(root, out):
     while True:
 
         if len(overlaps) == 0:
+            print(f"edf_overlaps.resolve: All overlaps resolved! See {os.path.join(out, constants.EXCLUDED_CHANNELS_LIST_FILENAME)} for info on channels omitted/trimmed. You won't need to run this again unless data in root dir changes.", enabled=constants.VERBOSE)
             break
 
         # print progress
@@ -407,6 +421,7 @@ def resolve(root, out):
                 
                 # trim the overlapping data from the end of the channel in file A
                 logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
+                single_excluded_channel(out, file_a_logicol, f"Overlaps partially with {file_b_logicol.index.item()}, but data is the same; identical section trimmed from end of this channel.")
 
             elif overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_B:
 
@@ -424,7 +439,8 @@ def resolve(root, out):
 
                 # same data occurs at same time in 2 different files, for entirety of each file, so we can arbitrarily remove one 
                 logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_a_logicol["collated_start"].item()
-                
+                single_excluded_channel(out, file_a_logicol, f"Overlaps entirely with {file_b_logicol.index.item()}, but data is the same, so this channel was removed.")
+
 
         else:  # data isn't the same; more problematic. TODO keep longest file (makes sense if think about it)? even if only temp solution
 
@@ -448,17 +464,18 @@ def resolve(root, out):
                 # remove both channels 
                 logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_a_logicol["collated_start"].item()
                 logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
-                
+
+                file_a_logicol_copy = file_a_logicol.copy()
+                file_a_logicol_copy["reason"] = f"Overlaps entirely with {file_b_logicol.index.item()}, but data is not the same."
+                file_b_logicol_copy = file_b_logicol.copy()
+                file_b_logicol_copy["reason"] = f"Overlaps entirely with {file_a_logicol.index.item()}, but data is not the same."
+
                 excluded_channels_filename = os.path.join(out, constants.EXCLUDED_CHANNELS_LIST_FILENAME)
                 try:
                     excluded_channels = pd.read_csv(excluded_channels_filename, index_col="index")
-                    file_a_logicol_copy = file_a_logicol.copy()
-                    file_a_logicol_copy["reason"] = f"Overlaps entirely with {file_b_logicol.index.item()}, but data is not the same."
-                    file_b_logicol_copy = file_b_logicol.copy()
-                    file_b_logicol_copy["reason"] = f"Overlaps entirely with {file_a_logicol.index.item()}, but data is not the same."
                     excluded_channels = pd.concat([excluded_channels, file_a_logicol_copy, file_b_logicol_copy])
                 except FileNotFoundError:
-                    excluded_channels = pd.concat([file_a_logicol, file_b_logicol])
+                    excluded_channels = pd.concat([file_a_logicol_copy, file_b_logicol_copy])
 
                 excluded_channels.to_csv(excluded_channels_filename, index_label="index")
                 print(f"edf_overlaps.resolve: Encountered overlap consisting entirely of both channels involved, but data not the same. Both channels omitted. See {excluded_channels_filename}. Manual correction recommended.", enabled=constants.VERBOSE)
