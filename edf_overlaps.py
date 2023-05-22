@@ -150,7 +150,7 @@ def interval_plot(interval_list):
 
 def check(root, out, mtx=None, verbose=constants.VERBOSE):
 
-    print("edf_overlaps.check: Checking for overlaps ... ", enabled=verbose)
+    print("edf_overlaps.check: Checking for overlaps (this may take a while on larger datasets) ... ", enabled=verbose)
 
     # create a data structure to hold information about an overlap
     overlap_mtx_entries = []
@@ -263,7 +263,7 @@ def check(root, out, mtx=None, verbose=constants.VERBOSE):
 
 def resolve(root, out):
 
-    print("edf_overlaps.resolve: Resolving overlaps ... ", enabled=constants.VERBOSE)
+    print("edf_overlaps.resolve: Resolving overlaps (This *will* take some time - but only needs to be done once.) ... ", enabled=constants.VERBOSE)
 
     # logicol_mtx holds information on where channels start/end in logical collation, though overlaps may be present
     try:
@@ -355,10 +355,7 @@ def resolve(root, out):
         if overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_A:
 
             file_a_overlap_start = file_b_collated_start - file_a_collated_start
-            file_a_overlap_end = file_a_overlap_start + overlap_duration
-
             file_b_overlap_start = 0
-            file_b_overlap_end = file_b_overlap_start + overlap_duration
 
         elif overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_B: # maybe impossible?
 
@@ -374,8 +371,11 @@ def resolve(root, out):
 
         elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
 
-            raise NotImplementedError(f"Reading overlapping data, type is {OverlapType.ENTIRETY_BOTH_FILES}")
+            file_a_overlap_start = 0
+            file_b_overlap_start = 0      
 
+        file_a_overlap_end = file_a_overlap_start + overlap_duration
+        file_b_overlap_end = file_b_overlap_start + overlap_duration
 
         file_a_sample_rate = file_a_logicol["channel_sample_rate"].item()
         file_a_channel_idx = file_a.getSignalLabels().index(overlap["channel"])
@@ -393,10 +393,14 @@ def resolve(root, out):
         file_a.close()
         file_b.close()
 
+        if file_a_sample_rate != file_b_sample_rate:
+            raise NotImplementedError(f"Data has differing sample rates: A={file_a_sample_rate}Hz, B={file_b_sample_rate}Hz")
+
         # is overlapping data the same?
         # TODO what about sample rates?
             # surely if differing sample rate, data wont be the same.
             # keep data of higher sample rate?
+        # TODO move open excluded_channels csv functionality into function, add excluded channels when data is identical
         if all(file_a_overlap_data == file_b_overlap_data):
 
             if overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_A:
@@ -418,7 +422,9 @@ def resolve(root, out):
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
 
-                raise NotImplementedError(f"Data is the same, type is {OverlapType.ENTIRETY_BOTH_FILES}")
+                # same data occurs at same time in 2 different files, for entirety of each file, so we can arbitrarily remove one 
+                logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_a_logicol["collated_start"].item()
+                
 
         else:  # data isn't the same; more problematic. TODO keep longest file (makes sense if think about it)? even if only temp solution
 
@@ -439,8 +445,24 @@ def resolve(root, out):
                 raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.ENTIRETY_FILE_B}")
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
+                # remove both channels 
+                logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_a_logicol["collated_start"].item()
+                logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
+                
+                excluded_channels_filename = os.path.join(out, constants.EXCLUDED_CHANNELS_LIST_FILENAME)
+                try:
+                    excluded_channels = pd.read_csv(excluded_channels_filename, index_col="index")
+                    file_a_logicol_copy = file_a_logicol.copy()
+                    file_a_logicol_copy["reason"] = f"Overlaps entirely with {file_b_logicol.index.item()}, but data is not the same."
+                    file_b_logicol_copy = file_b_logicol.copy()
+                    file_b_logicol_copy["reason"] = f"Overlaps entirely with {file_a_logicol.index.item()}, but data is not the same."
+                    excluded_channels = pd.concat([excluded_channels, file_a_logicol_copy, file_b_logicol_copy])
+                except FileNotFoundError:
+                    excluded_channels = pd.concat([file_a_logicol, file_b_logicol])
 
-                raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.ENTIRETY_BOTH_FILES}")
+                excluded_channels.to_csv(excluded_channels_filename, index_label="index")
+                print(f"edf_overlaps.resolve: Encountered overlap consisting entirely of both channels involved, but data not the same. Both channels omitted. See {excluded_channels_filename}. Manual correction recommended.", enabled=constants.VERBOSE)
+
 
         # we've fixed an overlap, so re-generate
         overlaps = check(root, out, mtx=logicol_mtx_trimmed, verbose=False)
