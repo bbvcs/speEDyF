@@ -421,7 +421,7 @@ def resolve(root, out):
                 
                 # trim the overlapping data from the end of the channel in file A
                 logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
-                single_excluded_channel(out, file_a_logicol, f"Overlaps partially with {file_b_logicol.index.item()}, but data is the same; identical section trimmed from end of this channel.")
+                single_excluded_channel(out, file_a_logicol, f"TRIMMED: Overlaps partially with {file_b_logicol.index.item()}, but data is the same; identical section trimmed from end of this channel.")
 
             elif overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_B:
 
@@ -439,7 +439,7 @@ def resolve(root, out):
 
                 # same data occurs at same time in 2 different files, for entirety of each file, so we can arbitrarily remove one 
                 logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_a_logicol["collated_start"].item()
-                single_excluded_channel(out, file_a_logicol, f"Overlaps entirely with {file_b_logicol.index.item()}, but data is the same, so this channel was removed.")
+                single_excluded_channel(out, file_a_logicol, f"REMOVED: Overlaps entirely with {file_b_logicol.index.item()}, but data is the same, so this channel was removed.")
 
 
         else:  # data isn't the same; more problematic. TODO keep longest file (makes sense if think about it)? even if only temp solution
@@ -466,9 +466,9 @@ def resolve(root, out):
                 logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
 
                 file_a_logicol_copy = file_a_logicol.copy()
-                file_a_logicol_copy["reason"] = f"Overlaps entirely with {file_b_logicol.index.item()}, but data is not the same."
+                file_a_logicol_copy["reason"] = f"REMOVED: Overlaps entirely with {file_b_logicol.index.item()}, but data is not the same."
                 file_b_logicol_copy = file_b_logicol.copy()
-                file_b_logicol_copy["reason"] = f"Overlaps entirely with {file_a_logicol.index.item()}, but data is not the same."
+                file_b_logicol_copy["reason"] = f"REMOVED: Overlaps entirely with {file_a_logicol.index.item()}, but data is not the same."
 
                 excluded_channels_filename = os.path.join(out, constants.EXCLUDED_CHANNELS_LIST_FILENAME)
                 try:
