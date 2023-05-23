@@ -7,6 +7,7 @@ import gc
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 import pyedflib
 
@@ -18,12 +19,57 @@ from .utils import constants
 class EDFSegment:
     """Container for segment data, as well as metadata such as sample rate and collation index."""
 
-    def __init__(self, data: pd.DataFrame, sample_rate: float, idx: int = None):
+    def __init__(self, data: pd.DataFrame, sample_rate: float, collated_start: int, collated_end: int, idx: int = None):
 
         self.data = data
         self.sample_rate = sample_rate
         self.idx = idx
+        self.collated_start = collated_start
+        self.collated_end = collated_end
 
+    def data_as_numpy(self):
+        """ Convenience function to convert channels to a 2D numpy array."""
+        return self.data.to_numpy().T
+
+
+    def plot(self):
+        """Produce a plot of the segment, with channels on the Y axis and time on the X axis.
+
+        Thanks to Mariella Panagiotopoulou for the original code!
+        """
+
+        data = self.data.to_numpy() # get data as column-per-channel (not row-per-cannel)
+        data_len_samples = data.shape[0]
+        channels = self.data.columns
+
+        timevec = np.linspace(self.collated_start, self.collated_end, data_len_samples)
+
+        # define seperator to add space between channels
+        try:
+            sep = np.max(np.abs(data[~np.isnan(data)])) * np.arange(len(channels) - 1, -1, -1)
+        except ValueError as v:
+
+            if False not in np.isnan(data): # entire segment is NaN?
+                sep = np.linspace(1, len(channels) - 1, len(channels))
+
+            else:
+                raise v
+
+        fig, ax = plt.subplots(figsize=(18,12))
+
+        ax.set_xlim([timevec.min(), timevec.max()])
+
+        for ch in range(len(channels)):
+            ax.plot(timevec, data[:, ch] + sep[ch])
+
+        ax.set_yticks(ticks= sep, labels=channels)
+        ax.set_title("Segment {}".format(self.idx))
+
+        ax.autoscale(enable=True, axis='y', tight=True)
+
+        fig.text(0.5, 0.01, 'Time (relative to whole collation start) (s)', ha='center')
+        fig.text(0.05, 0.5, 'Channel', va='center', rotation='vertical')
+        return fig, ax
 
 class EDFSegmenter:
 
@@ -316,7 +362,7 @@ class EDFSegmenter:
         columns = self.use_channels
         segment_data = pd.DataFrame(np.transpose(segment_data), columns=columns)
 
-        return EDFSegment(data=segment_data, idx=idx, sample_rate = segment_sample_rate)
+        return EDFSegment(data=segment_data, idx=idx, sample_rate=segment_sample_rate, collated_start=segment_collated_start, collated_end=segment_collated_end)
 
     def get_segments(self, start_idx=0, end_idx=None, count=None, verbose=False):
         """Get all segments from some segment start index to an end index, or the start index plus a count."""
