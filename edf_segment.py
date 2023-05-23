@@ -228,9 +228,14 @@ class EDFSegmenter:
             # get whole channel data
             with pyedflib.EdfReader(file) as edf_file:
 
-                # skip this if channel isn't in specified list
+                # skip this channel if it isn't in specified list
                 if channel_label not in self.use_channels:
                     continue
+
+                # skip this channel if it has been marked for removal via overlap resolution
+                if channel_collated_end == channel_collated_start:
+                    continue
+		
 
                 labels = edf_file.getSignalLabels()
                 # where is this channel in file, so we can read it
