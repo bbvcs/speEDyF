@@ -228,6 +228,9 @@ class EDFSegmenter:
                 or (idx is not None and (collated_start is not None or collated_end is not None)):
             raise TypeError("Either segment index (row in Segment Matrix containing collated start/end) OR a collated start AND end must be provided, but not both. ")
 
+        if idx >= self.get_max_segment_count() or idx < 0:
+            raise TypeError(f"Segment Index {idx} is out of range for Segmenter with Max-Segment-Count {self.get_max_segment_count()}. Valid Range: 0 => Index > {self.get_max_segment_count()}.")
+
         if idx is not None:
             # get where the segment starts/ends in whole logical collation mtx
             segment_collated_start = self.segments_mtx[self.segments_mtx["segment_idx"] == idx]["collated_start"].item()

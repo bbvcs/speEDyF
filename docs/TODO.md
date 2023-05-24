@@ -17,7 +17,9 @@
         # and channels of differing sample rates within same file/segment!
 
     # take hash of filesystem under root directory
+        # save to details.json?
         # so can tell if changed and program won't work anymore
+        # TODO; logicol matrix re-generation; not only check for forced, but if hash in details.json has changed.
 
 # Analysis
     # mne-python
