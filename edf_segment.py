@@ -8,6 +8,7 @@ import gc
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from scipy import signal
 
 import pyedflib
 
@@ -253,13 +254,12 @@ class EDFSegmenter:
             segment_sample_rate = 0  # this causes an empty segment dataframe to be produced
 
         elif len(segment_channels_sample_rates) > 1:
-            raise NotImplementedError("Segments currently only support files of the same sample rate") # TODO
-            # remember; if this scenario occurs, AND there is a gap between files,
-            # the gap can just be sampled at the decided-upon sample rate for this segment
-            # (i.e whatever sample rate we are down/upsampling the other file(s) too)
+            # if files to be used have different sample rates, pick the lowest, downsample the rest
+            # TODO is this correct? Should we print warning?
+            segment_sample_rate = min(segment_channels_sample_rates)
 
-        else:
-            segment_sample_rate = segment_channels_sample_rates[0]  # TEMPORARY
+        else: # most cases - all files to be used have the same sample rate
+            segment_sample_rate = segment_channels_sample_rates[0]
 
         # (if custom collated start/end specified, segment_len_s may differ from self.segment_len_s)
         segment_len_s = segment_collated_end - segment_collated_start
@@ -357,14 +357,24 @@ class EDFSegmenter:
 
             # TODO should probably use only one sample rate variable. How to deal with 2 files with differing sample rate?
 
+            # read the segment data
             channel_read_start  = int(np.floor(channel_read_start * channel_sample_rate))
             channel_read_stop   = int(np.floor(channel_read_stop  * channel_sample_rate))
+            data = channel_data[channel_read_start:channel_read_stop]
 
+            # downsample the data if necessary
+            if channel_sample_rate != segment_sample_rate:
+
+                downsampling_factor = channel_sample_rate/segment_sample_rate
+                if downsampling_factor % 1 != 0:
+                    raise Exception("")
+                downsampling_factor = np.int32(downsampling_factor)
+
+                data = signal.decimate(data, downsampling_factor, zero_phase=True)
+
+            # write the data into segment buffer
             segment_write_start = int(np.floor(segment_write_start * segment_sample_rate))
             segment_write_stop  = int(np.floor(segment_write_stop  * segment_sample_rate))
-
-            # read the segment data
-            data = channel_data[channel_read_start:channel_read_stop]
             segment_data[segment_channel_idx, segment_write_start:segment_write_stop] = data
 
 
