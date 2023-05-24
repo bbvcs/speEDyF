@@ -438,7 +438,8 @@ def resolve(root, out):
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
 
                 # same data occurs at same time in 2 different files, for entirety of each file, so we can arbitrarily remove one 
-                logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_a_logicol["collated_start"].item()
+                #logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_a_logicol["collated_start"].item()
+                logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=file_a_logicol.index.item())
                 single_excluded_channel(out, file_a_logicol, f"REMOVED: Overlaps entirely with {file_b_logicol.index.item()}, but data is the same, so this channel was removed.")
 
 
@@ -462,8 +463,9 @@ def resolve(root, out):
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
                 # remove both channels 
-                logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_a_logicol["collated_start"].item()
-                logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
+                #logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_a_logicol["collated_start"].item()
+                #logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
+                logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=[file_a_logicol.index.item(), file_b_logicol.index.item()])
 
                 file_a_logicol_copy = file_a_logicol.copy()
                 file_a_logicol_copy["reason"] = f"*REMOVED: Overlaps entirely with {file_b_logicol.index.item()}, but data is not the same, so both channels removed."
