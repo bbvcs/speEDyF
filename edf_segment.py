@@ -125,8 +125,10 @@ class EDFSegmenter:
                 self.use_channels = [ch for ch in use_channels if ch in self.__available_channels]
 
 
-        logicol_start_s = self.logicol_mtx["collated_start"].iloc[0]
-        logicol_end_s = self.logicol_mtx["collated_end"].iloc[-1]
+        #logicol_start_s = self.logicol_mtx["collated_start"].iloc[0]
+        #logicol_end_s = self.logicol_mtx["collated_end"].iloc[-1]
+        logicol_start_s = min(self.logicol_mtx["collated_start"])
+        logicol_end_s = max(self.logicol_mtx["collated_end"])
 
         # determine segment onset index within logical collation
         segment_onsets = np.arange(logicol_start_s, logicol_end_s-self.segment_len_s, self.segment_len_s)
