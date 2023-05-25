@@ -245,7 +245,7 @@ class EDFSegmenter:
 
         # find any channels in logicol mtx that overlap in time with our segment (i.e; channels we will use for segment)
         segment_channels = self.logicol_mtx.query(
-            "(@segment_collated_end >= collated_start) and (collated_end > @segment_collated_start)")
+            "(@segment_collated_end > collated_start) and (collated_end > @segment_collated_start)")
 
         # decide upon a sample rate for this segment, by looking at the channel data we are extracting
         segment_channels_sample_rates = pd.unique(segment_channels["channel_sample_rate"])
