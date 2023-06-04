@@ -20,18 +20,23 @@ from .utils import constants
 class EDFSegment:
     """Container for segment data, as well as metadata such as sample rate and collation index."""
 
-    def __init__(self, data: pd.DataFrame, sample_rate: float, collated_start: int, collated_end: int, idx: int = None):
+    def __init__(self, data: pd.DataFrame, sample_rate: float, collated_start: int, collated_end: int, idx: int = None, logicol_startdate = None):
 
         self.data = data
         self.sample_rate = sample_rate
         self.idx = idx
         self.collated_start = collated_start
         self.collated_end = collated_end
+        self.duration = collated_end - collated_start
+        self.__logicol_startdate = logicol_startdate
+
 
     def data_as_numpy(self):
         """ Convenience function to convert channels to a 2D numpy array."""
         return self.data.to_numpy().T
 
+    def get_segment_startdate(self):
+        return self.__logicol_startdate + datetime.timedelta(seconds=self.collated_start)
 
     def plot(self):
         """Produce a plot of the segment, with channels on the Y axis and time on the X axis.
@@ -116,6 +121,8 @@ class EDFSegmenter:
         with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "r") as details_file:
             details = json.load(details_file)
             self.__available_channels = details["channels_superset"]
+            self.__startdate = datetime.datetime.strptime(details["startdate"], '%Y-%m-%d %H:%M:%S')
+            self.__enddate = datetime.datetime.strptime(details["enddate"], '%Y-%m-%d %H:%M:%S')
 
         if use_channels != "all" and (not isinstance(use_channels, list) or any([type(ch) != str for ch in use_channels])):
             raise TypeError("edf_segment: Please ensure 'use_channels' is either 'all' or a list of strings.")
@@ -163,6 +170,9 @@ class EDFSegmenter:
         else:
             if isinstance(use_channels, list):
                 self.use_channels = [ch for ch in use_channels if ch in self.__available_channels]
+
+    def get_startdate(self):
+        return self.__startdate
 
     def clear_cache(self):
         self.cache = {}
@@ -382,7 +392,7 @@ class EDFSegmenter:
         columns = self.use_channels
         segment_data = pd.DataFrame(np.transpose(segment_data), columns=columns)
 
-        return EDFSegment(data=segment_data, idx=idx, sample_rate=segment_sample_rate, collated_start=segment_collated_start, collated_end=segment_collated_end)
+        return EDFSegment(data=segment_data, idx=idx, sample_rate=segment_sample_rate, collated_start=segment_collated_start, collated_end=segment_collated_end, logicol_startdate=self.__startdate)
 
     def get_segments(self, start_idx=0, end_idx=None, count=None, verbose=False):
         """Get all segments from some segment start index to an end index, or the start index plus a count."""

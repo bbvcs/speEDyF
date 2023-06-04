@@ -3,6 +3,7 @@ import enum
 import os
 import itertools
 import sys
+import json
 
 import numpy as np
 import pandas as pd
@@ -333,6 +334,31 @@ def resolve(root, out):
 
         if len(overlaps) == 0:
             print(f"\nedf_overlaps.resolve: All overlaps resolved! See {os.path.join(out, constants.EXCLUDED_CHANNELS_LIST_FILENAME)} for info on channels omitted/trimmed. You won't need to run this again unless data in root dir changes.", enabled=constants.VERBOSE)
+
+            # has the start/end date changed after trimming?
+            with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "r") as details_file:
+                details = json.load(details_file)
+
+            start_header = pyedflib.highlevel.read_edf_header(logicol_mtx_trimmed.iloc[0]["file"])
+            end_header = pyedflib.highlevel.read_edf_header(logicol_mtx_trimmed.iloc[-1]["file"])
+
+            startdate = str(start_header["startdate"])
+            enddate = str(end_header["startdate"] + datetime.timedelta(seconds=end_header["Duration"]))
+
+            changed = False
+
+            if startdate != details["startdate"]:
+                details["startdate"] = startdate
+                changed = True
+            if enddate != details["enddate"]:
+                details["enddate"] = enddate
+                changed = True
+
+            if changed:
+                # update details
+                with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "w") as details_file:
+                    json.dump(details, details_file)
+
             break
 
         # print progress

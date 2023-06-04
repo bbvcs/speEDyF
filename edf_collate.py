@@ -79,7 +79,7 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32, forced=False):
         try:
             edf_headers[file] = pyedflib.highlevel.read_edf_header(file, read_annotations=False)
         except OSError as e:
-            print(f"\tCould not read {file} ({e}), so removing from further processing.", enabled=constants.VERBOSE)
+            print(f"edf_collate: Could not read {file} ({e}), so removing from further processing.", enabled=constants.VERBOSE)
             unreadable_files.append(file)
 
     # remove any files that we couldn't read
@@ -267,6 +267,9 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32, forced=False):
         details = {
             "root": root,
             "channels_superset": edf_channels_superset,
+            "startdate": str(edf_headers[logicol_mtx.iloc[0]["file"]]["startdate"]),
+            "enddate": str(edf_headers[logicol_mtx.iloc[-1]["file"]]["startdate"]
+                       + datetime.timedelta(seconds=edf_headers[logicol_mtx.iloc[-1]["file"]]["Duration"])),
         }
         json.dump(details, details_file)
 
