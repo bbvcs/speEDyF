@@ -139,7 +139,8 @@ class EDFSegmenter:
         logicol_end_s = max(self.logicol_mtx["collated_end"])
 
         # determine segment onset index within logical collation
-        segment_onsets = np.arange(logicol_start_s, logicol_end_s-self.segment_len_s, self.segment_len_s)
+        segment_onsets = np.arange(logicol_start_s, logicol_end_s, self.segment_len_s)
+        segment_onsets = segment_onsets[~((logicol_end_s - segment_onsets) <= 0)] # make sure they are all correct length
         self.segments_mtx = pd.DataFrame({"segment_idx": [i for i in range(0, len(segment_onsets))],
                                           "collated_start": segment_onsets,
                                           "collated_end":   segment_onsets + self.segment_len_s})
