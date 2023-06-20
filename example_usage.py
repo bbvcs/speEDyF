@@ -1,7 +1,8 @@
+import os
 import time
 import sys
 
-sys.path.append("/home/billy/MSc")
+sys.path.append(os.path.join(os.getcwd(), ".."))
 from speEDyF import edf_collate, edf_overlaps, edf_segment
 
 
@@ -9,14 +10,14 @@ if __name__ == "__main__":
 
     start = time.time()
 
-    subject = "909"
-    root = f"/data/UCLH/icEEG/{subject}"
+    subject = "1379_ECGEKG"
+    root = f"/home/bcsm/University/stage-4/MSc_Project/UCLH/{subject}"
     out = f"out/{subject}"
 
     # produce collation matrix (saved as .csv to out)
     edf_collate(root, out)
 
-    # quickly check for overlaps
+    # *check* for overlaps (quick compared to resolving)
     if len(edf_overlaps.check(root, out, verbose=True)) != 0:
         edf_overlaps.resolve(root, out) # fix them if so (trim matrix) (can take a while)
 
@@ -25,25 +26,26 @@ if __name__ == "__main__":
 
     # maybe we want to use only EEG channels
     segmenter.set_used_channels([ch for ch in segmenter.get_available_channels() if ch != "ECG"])
-    # mor use all
+    # or use all
     segmenter.set_used_channels(segmenter.get_available_channels())
 
     # get a specific segment
-    segment = segmenter.get_segment(idx=34)
+    #segment = segmenter.get_segment(idx=34)
 
     # get some specific segments
-    segments = segmenter.get_segments(start_idx=200, count=20, verbose=True)
+    #segments = segmenter.get_segments(start_idx=200, count=20, verbose=True)
 
     # iterate over all segments in a memory-efficient way, starting from the first
     for segment in segmenter:
         print(f"{segment.idx+1}/{segmenter.get_max_segment_count()}")
+
+        print(segment.get_segment_startdate())
 
         # segment data in pandas DataFrame format
         data = segment.data
 
         # get a specific channel
         channel = segmenter.get_used_channels()[0]
-
         channel_data = data[channel]
 
         # TODO cleanup bandpower script, commit script dir, add example of usage

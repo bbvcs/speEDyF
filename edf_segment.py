@@ -99,24 +99,26 @@ class EDFSegmenter:
 
         try:
             self.logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME), index_col="index")
-            print("edf_segment: Overlap-trimmed Logicol Matrix found and successfully loaded", enabled=True)
+            print("edf_segment: Overlap-trimmed Logicol Matrix found and successfully loaded.", enabled=True)
 
         except FileNotFoundError:
-
-            if len(check(root, out)) > 0:
+            print("edf_segment: Could not find overlap-trimmed Logicol Matrix, checking if overlaps present in untrimmed Logicol Matrix ...", enabled=True)
+            if len(check(root, out, verbose=False)) > 0:
                 print(f"edf_segment: Warning: Trimmed Logicol Matrix could not be found in {out}, and it appears there are overlaps in your data.\n"
                       f"edf_segment: It is highly recommended that you run edf_overlaps.resolve(), to resolve these overlaps.\n"
                       f"edf_segment: Continue anyway with overlaps present? (y/n)", enabled=True)
                 if str(input("> ")).lower() != "y":
                     sys.exit(os.EX_NOINPUT)
+            else:
+                print("edf_segment: No overlaps present! Loading Logicol Matrix ...", enabled=True)
 
-            try:
-                self.logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME),
-                                               index_col="index")
+                try:
+                    self.logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME),
+                                                   index_col="index")
 
-            except FileNotFoundError:
-                print(f"edf_segment: Warning: Logicol Matrix could not be found in {out} - have you run edf_collate?", enabled=True)
-                sys.exit(os.EX_NOINPUT)
+                except FileNotFoundError:
+                    print(f"edf_segment: Warning: Logicol Matrix could not be found in {out} - have you run edf_collate? Exiting.", enabled=True)
+                    sys.exit(os.EX_NOINPUT)
 
         with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "r") as details_file:
             details = json.load(details_file)

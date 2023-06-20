@@ -103,6 +103,25 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32, forced=False):
     # rearrange edf_headers now that we've sorted files
     edf_headers = {file: edf_headers[file] for file in edf_files}
 
+    """ buggy, unnecessary?
+    if replace_ekg:
+        # maybe we want to replace some channel labels TODO make these more flexible parameters? e.g {EKG:ECG},{ekg:ecg}
+        for file, header in edf_headers.items():
+            for sig_header in header["SignalHeaders"]:
+                channel = sig_header["label"]
+
+                if "ekg" in channel.lower():
+                    channel_idx = edf_headers[file]['channels'].index(channel)
+
+                    if "EKG" in channel:
+                        new_value = channel.replace("EKG", "ECG")
+                    else:
+                        new_value = channel.replace("ekg", "ecg")
+
+                    sig_header["label"] = new_value
+                    edf_headers[file]['channels'][channel_idx] = new_value
+    """
+
     # using headers, construct matrix of which channels present in which files
     edf_channels_dict = {file: header["channels"] for file, header in edf_headers.items()}
     edf_channels_superset = sorted(set.union(*map(set, edf_channels_dict.values())))
