@@ -1,4 +1,5 @@
 import os
+import hashlib
 import datetime
 import math
 import json
@@ -12,7 +13,30 @@ import pyedflib
 from .utils.custom_print import print
 from .utils import constants
 
-def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32, forced=False):
+def get_edf_files(root):
+    """ Get all EDF-like files under a root directory """
+    edf_files = []
+    for path, subdirs, files in os.walk(root):
+        for file in files:
+            if file.split(".")[-1].lower() in ["edf", "edf+", "bdf", "bdf+"]:
+                edf_files.append(os.path.join(path, file))
+
+    return edf_files
+
+def hash_edfs_under_root(root):
+    """ Produce a hash using the EDF files under a root directory. This can be used to see if edf_collate needs to be
+        re-run. """
+    edf_files = get_edf_files(root)
+
+    sha = hashlib.sha1()
+    for file in edf_files:
+        sha.update(bytes(file, encoding="utf-8"))  # the file's path and name
+        sha.update(bytes(str(os.stat(file).st_size), encoding="utf-8"))  # the file's size in bytes
+        sha.update(bytes(str(os.stat(file).st_mtime), encoding="utf-8"))  # the file's last modified time
+
+    return sha.hexdigest()
+
+def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32):
     """ Produce a matrix representation of a chronologically ordered collection of EDF files.
 
     Given a root directory, find all EDF files present in the directory and any subdirectories.
@@ -44,34 +68,38 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32, forced=False):
     if not os.path.isdir(out):
         os.makedirs(out)
 
-    if not forced:
-        try:
-            pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME), index_col="index")
-            """
-            print(
-                f"edf_collate: Warning: Logicol Matrix already found in {out}. If data in {root} hasn't changed, you are unlikely to need to run this program again.\n"
-                f"edf_collate: Re-generate Logicol Matrix? (y/n)", enabled=True)
-            if str(input("> ")).lower() != "y":
-                return
-            """
 
+
+    try:
+        # if we can read a logicol mtx in this dir without error, we might not need to re-run collate
+        pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME), index_col="index")
+
+        # if we've ran this before for the same root directory, a details file should exist with a hash of this root dir
+        # at that time. If we re-take the hash and it is the same, we don't need to re-run this program.
+        previous_hash = None
+        with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "r") as details_file:
+            details = json.load(details_file)
+            previous_hash = details["hash"]
+
+        current_hash = hash_edfs_under_root(root)
+
+        if current_hash == previous_hash:
             print(
-                f"edf_collate: Warning: Logicol Matrix already found in {out}. If data in {root} hasn't changed, you are unlikely to need to run this program again.\n"
-                f"edf_collate: Parameter forced=False, so the Logicol Matrix will not be re-generated. If you need to re-generate the Logicol Matrix, re-run edf_collate with forced=True.", enabled=True)
+                f"edf_collate: Warning: Logicol Matrix already found in {out}, and data in {root} doesn't appear to have changed, so you will not need to run this program again.\n"
+                #f"edf_collate: Parameter forced=False, so the Logicol Matrix will not be re-generated. If you need to re-generate the Logicol Matrix, re-run edf_collate with forced=True."
+                , enabled=True)
             return
+        else:
+            print(f"edf_collate: Warning: Logicol Matrix already found in {out}, but data in {root} appears to have changed, so this program will be run again.\n", enabled=True)
 
-        except FileNotFoundError:
-            pass
+    except FileNotFoundError | KeyError:
+        pass
 
 
-    edf_files = []
     unreadable_files = []
 
     # collect edf files under root directory
-    for path, subdirs, files in os.walk(root):
-        for file in files:
-            if file.split(".")[-1].lower() in ["edf", "edf+", "bdf", "bdf+"]:
-                edf_files.append(os.path.join(path, file))
+    edf_files = get_edf_files(root)
 
     # read headers and store in dict of filepath -> header
     edf_headers = {}
@@ -285,6 +313,7 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32, forced=False):
     with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "w") as details_file:
         details = {
             "root": root,
+            "hash": hash_edfs_under_root(root),
             "channels_superset": edf_channels_superset,
             "startdate": str(edf_headers[logicol_mtx.iloc[0]["file"]]["startdate"]),
             "enddate": str(edf_headers[logicol_mtx.iloc[-1]["file"]]["startdate"]
