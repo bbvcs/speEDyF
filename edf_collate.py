@@ -92,7 +92,7 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32):
         else:
             print(f"edf_collate: Warning: Logicol Matrix already found in {out}, but data in {root} appears to have changed, so this program will be run again.\n", enabled=True)
 
-    except FileNotFoundError | KeyError:
+    except (FileNotFoundError, KeyError):
         pass
 
 
