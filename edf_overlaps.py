@@ -262,6 +262,7 @@ def check(root, out, mtx=None, verbose=constants.VERBOSE):
     return overlap_mtx_entries
 
 def single_excluded_channel(out, excluded_channel, reason):
+    """Add details for an excluded/trimmed channel to the excluded_channels.csv"""
     excluded_channels_filename = os.path.join(out, constants.EXCLUDED_CHANNELS_LIST_FILENAME)
 
     excluded_channel_copy = excluded_channel.copy()
@@ -367,7 +368,7 @@ def resolve(root, out):
         # resolve first overlap, then re-call check_overlaps; if resolved, it will not be present, and we move on to next
         overlap = overlaps[0]
 
-        # get the logicol info for these channels
+        # get the logicol info for these channels TODO these should be called channel_a_logicol etc not file_a_logicol
         file_a_logicol = logicol_mtx_trimmed.loc[
             (logicol_mtx_trimmed["file"] == overlap["file_A"]) & (logicol_mtx_trimmed["channel"] == overlap["channel"])]
         file_b_logicol = logicol_mtx_trimmed.loc[
@@ -407,7 +408,8 @@ def resolve(root, out):
 
         elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_B:
 
-            raise NotImplementedError(f"Reading overlapping data, type is {OverlapType.ENTIRETY_FILE_B}, files: {overlap['file_A']}, {overlap['file_B']}")
+            file_a_overlap_start = file_b_collated_start - file_a_collated_start
+            file_b_overlap_start = 0
 
         elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
 
@@ -434,6 +436,7 @@ def resolve(root, out):
         file_b.close()
 
         if file_a_sample_rate != file_b_sample_rate:
+            # see edf_segment for how to fix this. Leaving it for now so we get some test data.
             raise NotImplementedError(f"Data has differing sample rates: A={file_a_sample_rate}Hz, B={file_b_sample_rate}Hz")
 
         # is overlapping data the same?
@@ -459,7 +462,10 @@ def resolve(root, out):
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_B:
 
-                raise NotImplementedError(f"Data is the same, type is {OverlapType.ENTIRETY_FILE_B}, files: {overlap['file_A']}, {overlap['file_B']}")
+                # same data occurs at same time in a and b, but there is more data in a besides the overlapping section, so remove b.
+                logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=file_b_logicol.index.item())
+                single_excluded_channel(out, file_b_logicol,
+                                        f"REMOVED: Overlaps entirely (and data is the same) with {file_a_logicol.index.item()}, but there is data in the other channel besides the overlapping section, so this channel was removed.")
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
 
@@ -469,11 +475,32 @@ def resolve(root, out):
                 single_excluded_channel(out, file_a_logicol, f"REMOVED: Overlaps entirely with {file_b_logicol.index.item()}, but data is the same, so this channel was removed.")
 
 
-        else:  # data isn't the same; more problematic. TODO keep longest file (makes sense if think about it)? even if only temp solution
+        else:  # data isn't the same; more problematic.
 
             if overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_A:
 
-                raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.PARTIAL_BOTH_ENDOF_A}, files: {overlap['file_A']}, {overlap['file_B']}")
+                # keep the longest channel. TODO Not sure this is best solution but will do for now.
+                # known subjects where this occurs: 1006 (defo not best solution here)
+                # need to check excluded channels mtx to determine other channels where this happens
+
+                file_a_duration = file_a_logicol["channel_duration"].item()
+                file_b_duration = file_b_logicol["channel_duration"].item()
+
+                if file_a_duration > file_b_duration:
+                    # trim the overlapping data from the start of the channel in file B
+                    logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_start"] = file_a_logicol["collated_end"].item()
+                    single_excluded_channel(out, file_b_logicol,
+                                            f"TRIMMED: Overlaps partially with {file_a_logicol.index.item()}. "
+                                            f"Data is not the same. Other channel is longer, so overlapping section from end of this channel trimmed.")
+
+                else:
+                    # trim the overlapping data from the end of the channel in file A
+                    logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
+                    single_excluded_channel(out, file_a_logicol,
+                                            f"TRIMMED: Overlaps partially with {file_b_logicol.index.item()}. "
+                                            f"Data is not the same. Other channel is longer, so overlapping section from end of this channel trimmed.")
+
+
 
             elif overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_B:
 
@@ -484,6 +511,13 @@ def resolve(root, out):
                 raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.ENTIRETY_FILE_A}, files: {overlap['file_A']}, {overlap['file_B']}")
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_B:
+
+                """ I've written this solution (suppose is better to keep longer channel with more data in?), but want to keep exception in to see what data is like in this case.
+                # different data occurs at same time in a and b, but there is more data in a besides the overlapping section, so remove b.
+                logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=file_b_logicol.index.item())
+                single_excluded_channel(out, file_b_logicol,
+                                        f"REMOVED: Overlaps entirely (data is not the same!) with {file_a_logicol.index.item()}, but there is data in the other channel besides the overlapping section, so this channel was removed and the other kept.")
+                """
 
                 raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.ENTIRETY_FILE_B}, files: {overlap['file_A']}, {overlap['file_B']}")
 
