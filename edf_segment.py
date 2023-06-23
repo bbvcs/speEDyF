@@ -279,7 +279,9 @@ class EDFSegmenter:
 
         elif len(segment_channels_sample_rates) > 1:
             # if files to be used have different sample rates, pick the lowest, downsample the rest
-            # TODO is this correct? Should we print warning?
+            print(f"edf_segment: Warning, files for segment {idx} are of differing sample rates. "
+                  f"Sample rate superset: {segment_channels_sample_rates}. Minimum {min(segment_channels_sample_rates)} "
+                  f"will be used, other file(s) downsampled.", enabled=True)
             segment_sample_rate = min(segment_channels_sample_rates)
 
         else: # most cases - all files to be used have the same sample rate

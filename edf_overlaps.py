@@ -399,15 +399,15 @@ def resolve(root, out):
 
         elif overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_B: # maybe impossible?
 
-            raise NotImplementedError(f"Reading overlapping data, type is {OverlapType.PARTIAL_BOTH_ENDOF_B}")
+            raise NotImplementedError(f"Reading overlapping data, type is {OverlapType.PARTIAL_BOTH_ENDOF_B}, files: {overlap['file_A']}, {overlap['file_B']}")
 
         elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_A: # maybe impossible?
 
-            raise NotImplementedError(f"Reading overlapping data, type is {OverlapType.ENTIRETY_FILE_A}")
+            raise NotImplementedError(f"Reading overlapping data, type is {OverlapType.ENTIRETY_FILE_A}, files: {overlap['file_A']}, {overlap['file_B']}")
 
         elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_B:
 
-            raise NotImplementedError(f"Reading overlapping data, type is {OverlapType.ENTIRETY_FILE_B}")
+            raise NotImplementedError(f"Reading overlapping data, type is {OverlapType.ENTIRETY_FILE_B}, files: {overlap['file_A']}, {overlap['file_B']}")
 
         elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
 
@@ -451,15 +451,15 @@ def resolve(root, out):
 
             elif overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_B:
 
-                raise NotImplementedError(f"Data is the same, type is {OverlapType.PARTIAL_BOTH_ENDOF_B}")
+                raise NotImplementedError(f"Data is the same, type is {OverlapType.PARTIAL_BOTH_ENDOF_B}, files: {overlap['file_A']}, {overlap['file_B']}")
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_A:
 
-                raise NotImplementedError(f"Data is the same, type is {OverlapType.ENTIRETY_FILE_A}")
+                raise NotImplementedError(f"Data is the same, type is {OverlapType.ENTIRETY_FILE_A}, files: {overlap['file_A']}, {overlap['file_B']}")
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_B:
 
-                raise NotImplementedError(f"Data is the same, type is {OverlapType.ENTIRETY_FILE_B}")
+                raise NotImplementedError(f"Data is the same, type is {OverlapType.ENTIRETY_FILE_B}, files: {overlap['file_A']}, {overlap['file_B']}")
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
 
@@ -473,19 +473,19 @@ def resolve(root, out):
 
             if overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_A:
 
-                raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.PARTIAL_BOTH_ENDOF_A}")
+                raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.PARTIAL_BOTH_ENDOF_A}, files: {overlap['file_A']}, {overlap['file_B']}")
 
             elif overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_B:
 
-                raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.PARTIAL_BOTH_ENDOF_B}")
+                raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.PARTIAL_BOTH_ENDOF_B}, files: {overlap['file_A']}, {overlap['file_B']}")
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_A:
 
-                raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.ENTIRETY_FILE_A}")
+                raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.ENTIRETY_FILE_A}, files: {overlap['file_A']}, {overlap['file_B']}")
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_B:
 
-                raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.ENTIRETY_FILE_B}")
+                raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.ENTIRETY_FILE_B}, files: {overlap['file_A']}, {overlap['file_B']}")
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
                 # remove both channels 
