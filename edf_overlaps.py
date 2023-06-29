@@ -8,6 +8,7 @@ import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from scipy import signal
 
 import pyedflib
 
@@ -420,14 +421,16 @@ def resolve(root, out):
         file_b_overlap_end = file_b_overlap_start + overlap_duration
 
         file_a_sample_rate = file_a_logicol["channel_sample_rate"].item()
-        file_a_channel_idx = file_a.getSignalLabels().index(overlap["channel"])
+        file_a_signal_labels = [label.upper() for label in file_a.getSignalLabels()]
+        file_a_channel_idx = file_a_signal_labels.index(overlap["channel"])
         file_a_overlap_data = file_a.readSignal(file_a_channel_idx,
                                                 start=int(np.floor((file_a_overlap_start * file_a_sample_rate))),
                                                 n = int(np.floor((overlap_duration * file_a_sample_rate))))
 
 
         file_b_sample_rate = file_b_logicol["channel_sample_rate"].item()
-        file_b_channel_idx = file_b.getSignalLabels().index(overlap["channel"])
+        file_b_signal_labels = [label.upper() for label in file_b.getSignalLabels()]
+        file_b_channel_idx = file_b_signal_labels.index(overlap["channel"])
         file_b_overlap_data = file_b.readSignal(file_b_channel_idx,
                                                 start=int(np.floor((file_b_overlap_start * file_b_sample_rate))),
                                                 n=int(np.floor((overlap_duration * file_b_sample_rate))))
@@ -477,28 +480,79 @@ def resolve(root, out):
 
         else:  # data isn't the same; more problematic.
 
+            # first, check if either signal appears to be electrical noise
+            fa, pxxa = signal.welch(file_a_overlap_data - np.mean(file_a_overlap_data),
+                                    file_a_sample_rate, nperseg=file_a_sample_rate * 30)
+
+            # powerline interference is at 50hz/60hz depending on region
+            fa_50hz_loc = np.where(fa >= 50)[0][0]
+            fa_60hz_loc = np.where(fa >= 60)[0][0]
+
+            # what is the power of the (incl. surrounding freqs) dominant powerline frequency?
+            pxxa_50hz_sum = np.sum(pxxa[fa_50hz_loc - 5:fa_50hz_loc + 5])
+            pxxa_60hz_sum = np.sum(pxxa[fa_60hz_loc - 5:fa_60hz_loc + 5])
+
+            # what proportion of overall signal power does the dominant powerline frequency occupy?
+            file_a_50hz_proportion = pxxa_50hz_sum / np.sum(pxxa)
+            file_a_60hz_proportion = pxxa_60hz_sum / np.sum(pxxa)
+
+            fb, pxxb = signal.welch(file_b_overlap_data - np.mean(file_b_overlap_data),
+                                    file_b_sample_rate, nperseg=file_b_sample_rate * 30)
+
+            fb_50hz_loc = np.where(fb >= 50)[0][0]
+            fb_60hz_loc = np.where(fb >= 60)[0][0]
+
+            pxxb_50hz_sum = np.sum(pxxb[fb_50hz_loc - 5:fb_50hz_loc + 5])
+            pxxb_60hz_sum = np.sum(pxxb[fb_60hz_loc - 5:fb_60hz_loc + 5])
+
+            file_b_50hz_proportion = pxxb_50hz_sum / np.sum(pxxb)
+            file_b_60hz_proportion = pxxb_60hz_sum / np.sum(pxxb)
+
+            powerline_proportion_threshold = 0.90 # what percentage of signal has to be powerline for us to discard it?
+
+            # what we do with this information depends on type of overlap ...
+
             if overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_A:
 
-                # keep the longest channel. TODO Not sure this is best solution but will do for now.
-                # known subjects where this occurs: 1006 (defo not best solution here)
-                # need to check excluded channels mtx to determine other channels where this happens
+                if (file_a_50hz_proportion > powerline_proportion_threshold) \
+                        or (file_a_60hz_proportion > powerline_proportion_threshold):
 
-                file_a_duration = file_a_logicol["channel_duration"].item()
-                file_b_duration = file_b_logicol["channel_duration"].item()
+                    # overlapping section of channel in file A looks to be mostly powerline noise - trim it
+                    logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] \
+                        = file_b_logicol["collated_start"].item()
+                    single_excluded_channel(out, file_a_logicol, f"TRIMMED: Overlaps partially with {file_b_logicol.index.item()}, and data is not the same; this appears to be only electrical powerline noise, so overlapping section trimmed from this channel.")
 
-                if file_a_duration > file_b_duration:
-                    # trim the overlapping data from the start of the channel in file B
-                    logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_start"] = file_a_logicol["collated_end"].item()
-                    single_excluded_channel(out, file_b_logicol,
-                                            f"TRIMMED: Overlaps partially with {file_a_logicol.index.item()}. "
-                                            f"Data is not the same. Other channel is longer, so overlapping section from end of this channel trimmed.")
+                elif (file_b_50hz_proportion > powerline_proportion_threshold) \
+                        or (file_b_60hz_proportion > powerline_proportion_threshold):
+
+                    # overlapping section of channel in file B looks to be mostly powerline noise - trim it
+                    logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_start"] \
+                        = file_a_logicol["collated_end"].item()
+                    single_excluded_channel(out, file_a_logicol, f"TRIMMED: Overlaps partially with {file_a_logicol.index.item()}, and data is not the same; this appears to be only electrical powerline noise, so overlapping section trimmed from this channel.")
+
 
                 else:
-                    # trim the overlapping data from the end of the channel in file A
-                    logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
-                    single_excluded_channel(out, file_a_logicol,
-                                            f"TRIMMED: Overlaps partially with {file_b_logicol.index.item()}. "
-                                            f"Data is not the same. Other channel is longer, so overlapping section from end of this channel trimmed.")
+
+                    # keep the longest channel. TODO Not sure this is best solution but will do for now.
+                    # known subjects where this occurs: 1006 (defo not best solution here)
+                    # need to check excluded channels mtx to determine other channels where this happens
+
+                    file_a_duration = file_a_logicol["channel_duration"].item()
+                    file_b_duration = file_b_logicol["channel_duration"].item()
+
+                    if file_a_duration > file_b_duration:
+                        # trim the overlapping data from the start of the channel in file B
+                        logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_start"] = file_a_logicol["collated_end"].item()
+                        single_excluded_channel(out, file_b_logicol,
+                                                f"TRIMMED: Overlaps partially with {file_a_logicol.index.item()}. "
+                                                f"Data is not the same. Other channel is longer, so overlapping section from end of this channel trimmed.")
+
+                    else:
+                        # trim the overlapping data from the end of the channel in file A
+                        logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
+                        single_excluded_channel(out, file_a_logicol,
+                                                f"TRIMMED: Overlaps partially with {file_b_logicol.index.item()}. "
+                                                f"Data is not the same. Other channel is longer, so overlapping section from end of this channel trimmed.")
 
 
 
@@ -512,35 +566,84 @@ def resolve(root, out):
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_B:
 
-                """ I've written this solution (suppose is better to keep longer channel with more data in?), but want to keep exception in to see what data is like in this case.
-                # different data occurs at same time in a and b, but there is more data in a besides the overlapping section, so remove b.
-                logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=file_b_logicol.index.item())
-                single_excluded_channel(out, file_b_logicol,
-                                        f"REMOVED: Overlaps entirely (data is not the same!) with {file_a_logicol.index.item()}, but there is data in the other channel besides the overlapping section, so this channel was removed and the other kept.")
-                """
+                if (file_a_50hz_proportion > powerline_proportion_threshold)  \
+                    or (file_a_60hz_proportion > powerline_proportion_threshold):
+                    # channel in file A looks to be mostly powerline noise.
+                    # file B starts/ends within file A, so trim out the overlapping section from file A, leaving bits on
+                    # both sides.
 
-                raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.ENTIRETY_FILE_B}, files: {overlap['file_A']}, {overlap['file_B']}")
+                    j = file_a_logicol.copy()
+
+                    # trim current entry up to the point that the overlap starts
+                    logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
+
+                    # add a new entry for this channel, starting at the where overlap ends
+                    j["collated_start"] = file_b_logicol["collated_end"].item()
+                    logicol_mtx_trimmed.loc[file_a_logicol.index.item() + 0.5] = j.values[0]
+                    logicol_mtx_trimmed = logicol_mtx_trimmed.sort_index()
+
+                    single_excluded_channel(out, file_a_logicol,
+                                            f"TRIMMED: {file_b_logicol.index.item()} overlaps entirely with this channel, but not vice-versa."
+                                            f"Data is not the same. The overlapping section of this channel appears to only electrical powerline noise, so was trimmed-out.")
+
+
+                elif (file_b_50hz_proportion > powerline_proportion_threshold)  \
+                    or (file_b_60hz_proportion > powerline_proportion_threshold):
+                    # channel in file B looks to be mostly powerline noise.
+                    # file B starts/ends within file A, so can discard, and keep overlapping section from file A.
+                    logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=file_b_logicol.index.item())
+                    single_excluded_channel(out, file_b_logicol,
+                                            f"REMOVED: Overlaps entirely (but not vice-versa, and data is not the same!) with {file_a_logicol.index.item()}, and this appears to only electrical powerline noise, so was removed. ")
+                else:
+                    # both data appear to be valid...
+
+                    # different data occurs at same time in a and b, but there is more data in a besides the overlapping section, so remove b.
+                    # TODO not a perfect solution.
+                    logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=file_b_logicol.index.item())
+                    single_excluded_channel(out, file_b_logicol,
+                                            f"REMOVED: Overlaps entirely (data is not the same!) with {file_a_logicol.index.item()}, but there is data in the other channel besides the overlapping section, so this channel was removed and the other kept.")
+
+
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_BOTH_FILES:
-                # remove both channels 
-                #logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_a_logicol["collated_start"].item()
-                #logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
-                logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=[file_a_logicol.index.item(), file_b_logicol.index.item()])
 
-                file_a_logicol_copy = file_a_logicol.copy()
-                file_a_logicol_copy["reason"] = f"*REMOVED: Overlaps entirely with {file_b_logicol.index.item()}, but data is not the same, so both channels removed."
-                file_b_logicol_copy = file_b_logicol.copy()
-                file_b_logicol_copy["reason"] = f"*REMOVED: Overlaps entirely with {file_a_logicol.index.item()}, but data is not the same, so both channels removed."
+                if (file_a_50hz_proportion > powerline_proportion_threshold)  \
+                    or (file_a_60hz_proportion > powerline_proportion_threshold):
 
-                excluded_channels_filename = os.path.join(out, constants.EXCLUDED_CHANNELS_LIST_FILENAME)
-                try:
-                    excluded_channels = pd.read_csv(excluded_channels_filename, index_col="index")
-                    excluded_channels = pd.concat([excluded_channels, file_a_logicol_copy, file_b_logicol_copy])
-                except FileNotFoundError:
-                    excluded_channels = pd.concat([file_a_logicol_copy, file_b_logicol_copy])
+                    # channel in file A looks to be mostly powerline noise - drop it
+                    logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=file_a_logicol.index.item())
+                    single_excluded_channel(out, file_a_logicol,
+                                            f"REMOVED: Overlaps entirely (and data is not the same!) with {file_b_logicol.index.item()}, and this appears to only electrical powerline noise, so was removed. ")
 
-                excluded_channels.to_csv(excluded_channels_filename, index_label="index")
-                print(f"edf_overlaps.resolve: Encountered overlap consisting entirely of both channels involved, but data not the same. Both channels omitted. See *REMOVED in {excluded_channels_filename}. Manual correction recommended.", enabled=constants.VERBOSE)
+                elif (file_b_50hz_proportion > powerline_proportion_threshold)  \
+                    or (file_b_60hz_proportion > powerline_proportion_threshold):
+
+                    # channel in file B looks to be mostly powerline noise - drop it
+                    logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=file_b_logicol.index.item())
+                    single_excluded_channel(out, file_b_logicol,
+                                            f"REMOVED: Overlaps entirely (and data is not the same!) with {file_a_logicol.index.item()}, and this appears to only electrical powerline noise, so was removed. ")
+
+                else:
+
+                    # remove both channels
+                    #logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_a_logicol["collated_start"].item()
+                    #logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_end"] = file_b_logicol["collated_start"].item()
+                    logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=[file_a_logicol.index.item(), file_b_logicol.index.item()])
+
+                    file_a_logicol_copy = file_a_logicol.copy()
+                    file_a_logicol_copy["reason"] = f"*REMOVED: Overlaps entirely with {file_b_logicol.index.item()}, but data is not the same, so both channels removed."
+                    file_b_logicol_copy = file_b_logicol.copy()
+                    file_b_logicol_copy["reason"] = f"*REMOVED: Overlaps entirely with {file_a_logicol.index.item()}, but data is not the same, so both channels removed."
+
+                    excluded_channels_filename = os.path.join(out, constants.EXCLUDED_CHANNELS_LIST_FILENAME)
+                    try:
+                        excluded_channels = pd.read_csv(excluded_channels_filename, index_col="index")
+                        excluded_channels = pd.concat([excluded_channels, file_a_logicol_copy, file_b_logicol_copy])
+                    except FileNotFoundError:
+                        excluded_channels = pd.concat([file_a_logicol_copy, file_b_logicol_copy])
+
+                    excluded_channels.to_csv(excluded_channels_filename, index_label="index")
+                    print(f"edf_overlaps.resolve: Encountered overlap consisting entirely of both channels involved, but data not the same. Both channels omitted. See *REMOVED in {excluded_channels_filename}. Manual correction recommended.", enabled=constants.VERBOSE)
 
 
         # we've fixed an overlap, so re-generate

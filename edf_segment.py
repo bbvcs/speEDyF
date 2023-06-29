@@ -312,9 +312,8 @@ class EDFSegmenter:
                 # skip this channel if it has been marked for removal via overlap resolution
                 if channel_collated_end == channel_collated_start:
                     continue
-		
 
-                labels = edf_file.getSignalLabels()
+                labels = [label.upper() for label in edf_file.getSignalLabels()]
                 # where is this channel in file, so we can read it
                 file_channel_idx = labels.index(channel_label)
 
