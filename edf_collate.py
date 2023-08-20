@@ -155,7 +155,7 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32):
     # set all to uppercase, for compatibility:
     for file, channels in edf_channels_dict.items():
         for idx, channel in enumerate(channels):
-            edf_channels_dict[file][idx] = str(channel).upper()
+            edf_channels_dict[file][idx] = str(channel).upper().strip()
 
     edf_channels_superset = sorted(set.union(*map(set, edf_channels_dict.values())))
     edf_channels_ndarray = np.zeros(shape=(len(edf_channels_superset), len(edf_files)), dtype=np.int8)
@@ -186,7 +186,7 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32):
     for file, header in edf_headers.items():
         edf_channel_sample_rates[file] = {}
         for sig_header in header["SignalHeaders"]:
-            channel = str(sig_header["label"]).upper()
+            channel = str(sig_header["label"]).upper().strip()
             sample_rate = sig_header["sample_rate"]
 
             edf_channel_sample_rates[file][channel] = sample_rate

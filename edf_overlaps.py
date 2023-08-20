@@ -421,7 +421,7 @@ def resolve(root, out):
         file_b_overlap_end = file_b_overlap_start + overlap_duration
 
         file_a_sample_rate = file_a_logicol["channel_sample_rate"].item()
-        file_a_signal_labels = [label.upper() for label in file_a.getSignalLabels()]
+        file_a_signal_labels = [label.upper().strip() for label in file_a.getSignalLabels()]
         file_a_channel_idx = file_a_signal_labels.index(overlap["channel"])
         file_a_overlap_data = file_a.readSignal(file_a_channel_idx,
                                                 start=int(np.floor((file_a_overlap_start * file_a_sample_rate))),
@@ -429,7 +429,7 @@ def resolve(root, out):
 
 
         file_b_sample_rate = file_b_logicol["channel_sample_rate"].item()
-        file_b_signal_labels = [label.upper() for label in file_b.getSignalLabels()]
+        file_b_signal_labels = [label.upper().strip() for label in file_b.getSignalLabels()]
         file_b_channel_idx = file_b_signal_labels.index(overlap["channel"])
         file_b_overlap_data = file_b.readSignal(file_b_channel_idx,
                                                 start=int(np.floor((file_b_overlap_start * file_b_sample_rate))),

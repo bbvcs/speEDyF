@@ -313,7 +313,7 @@ class EDFSegmenter:
                 if channel_collated_end == channel_collated_start:
                     continue
 
-                labels = [label.upper() for label in edf_file.getSignalLabels()]
+                labels = [label.upper().strip() for label in edf_file.getSignalLabels()]
                 # where is this channel in file, so we can read it
                 file_channel_idx = labels.index(channel_label)
 
