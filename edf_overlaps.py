@@ -371,8 +371,8 @@ def resolve(root, out):
 
         # get the logicol info for these channels TODO these should be called channel_a_logicol etc not file_a_logicol
         # if the file is the same & channel is the same & they overlap in time with the overlap object (see def check_time_overlap()). This last part may seem redundant, but resolving ENTIRETY FILE B can split a channel in 2, so without last clause would get 2 hits 
-	file_a_logicol = logicol_mtx_trimmed.loc[(logicol_mtx_trimmed["file"] == overlap["file_A"]) & (logicol_mtx_trimmed["channel"] == overlap["channel"]) & (~((logicol_mtx_trimmed["collated_end"] <= overlap["overlap_start"]) | (overlap["overlap_end"]<= logicol_mtx_trimmed["collated_start"])))]
-	file_b_logicol = logicol_mtx_trimmed.loc[(logicol_mtx_trimmed["file"] == overlap["file_B"]) & (logicol_mtx_trimmed["channel"] == overlap["channel"]) & (~((logicol_mtx_trimmed["collated_end"] <= overlap["overlap_start"]) | (overlap["overlap_end"]<= logicol_mtx_trimmed["collated_start"])))]
+        file_a_logicol = logicol_mtx_trimmed.loc[(logicol_mtx_trimmed["file"] == overlap["file_A"]) & (logicol_mtx_trimmed["channel"] == overlap["channel"]) & (~((logicol_mtx_trimmed["collated_end"] <= overlap["overlap_start"]) | (overlap["overlap_end"]<= logicol_mtx_trimmed["collated_start"])))]
+        file_b_logicol = logicol_mtx_trimmed.loc[(logicol_mtx_trimmed["file"] == overlap["file_B"]) & (logicol_mtx_trimmed["channel"] == overlap["channel"]) & (~((logicol_mtx_trimmed["collated_end"] <= overlap["overlap_start"]) | (overlap["overlap_end"]<= logicol_mtx_trimmed["collated_start"])))]
 
 
         file_a_collated_start = file_a_logicol["collated_start"].item()
