@@ -341,8 +341,8 @@ def resolve(root, out):
             with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "r") as details_file:
                 details = json.load(details_file)
 
-            start_header = pyedflib.highlevel.read_edf_header(logicol_mtx_trimmed.iloc[0]["file"])
-            end_header = pyedflib.highlevel.read_edf_header(logicol_mtx_trimmed.iloc[-1]["file"])
+            start_header = pyedflib.highlevel.read_edf_header(logicol_mtx_trimmed.iloc[0]["file"], read_annotations=False)
+            end_header = pyedflib.highlevel.read_edf_header(logicol_mtx_trimmed.iloc[-1]["file"], read_annotations=False)
 
             startdate = str(start_header["startdate"])
             enddate = str(end_header["startdate"] + datetime.timedelta(seconds=end_header["Duration"]))
