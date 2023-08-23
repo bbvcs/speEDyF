@@ -12,7 +12,7 @@
 	- Requires only the root directory, no additional metadata.
 	- Accounts for gaps in time between recordings.
 	- Check for and deal with **time** (i.e overlapping start/end times) and **space** (i.e EDF channels) **overlaps** between files/channels.
-	- Supports files/channels with differing sample rates. (**TODO**)
+	- Supports files/channels with differing sample rates. 
 
 2. Break the ordered series into segments of a specified time length (e.g 5 minutes).
 	- **Iterable interface** provided to efficiently read segments into memory one-by-one.
@@ -24,5 +24,4 @@
 
 
 ## Tutorial
-**TODO**
-see example_usage.py
+See example_usage.py.
