@@ -374,14 +374,14 @@ class EDFSegmenter:
             # CHANNEL in FILE:        -------
             elif segment_collated_start < channel_collated_start and segment_collated_end > channel_collated_end:
                 channel_read_start = 0
-                channel_read_sample_count = channel_duration
+                channel_read_sample_count = channel_collated_end-channel_collated_start #channel_duration
                 channel_read_stop = channel_read_start + channel_read_sample_count
 
                 segment_write_start = channel_collated_start - segment_collated_start
                 segment_write_stop = segment_write_start + channel_read_sample_count
 
             # TODO should probably use only one sample rate variable. How to deal with 2 files with differing sample rate?
-
+            
             # read the segment data
             channel_read_start  = int(np.floor(channel_read_start * channel_sample_rate))
             channel_read_stop   = int(np.floor(channel_read_stop  * channel_sample_rate))
