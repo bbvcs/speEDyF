@@ -68,7 +68,9 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32):
     if not os.path.isdir(out):
         os.makedirs(out)
 
-
+    params_object = {
+        "minimum_edf_channel_sample_rate_hz" : minimum_edf_channel_sample_rate_hz,
+    }
 
     try:
         # if we can read a logicol mtx in this dir without error, we might not need to re-run collate
@@ -81,14 +83,29 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32):
             details = json.load(details_file)
             previous_hash = details["hash"]
 
+            previous_params = None
+            if "params" in details.keys():
+                previous_params = details["params"]
+
         current_hash = hash_edfs_under_root(root)
 
         if current_hash == previous_hash:
-            print(
-                f"edf_collate: Warning: Logicol Matrix already found in {out}, and data in {root} doesn't appear to have changed, so you will not need to run this program again.\n"
-                #f"edf_collate: Parameter forced=False, so the Logicol Matrix will not be re-generated. If you need to re-generate the Logicol Matrix, re-run edf_collate with forced=True."
-                , enabled=True)
-            return
+
+            rerun = False
+
+            if isinstance(previous_params, dict):
+               if previous_params != params_object:
+                   print(
+                       f"edf_collate: Warning: Logicol Matrix already found in {out}, but it appears parameters have changed, so this program will be run again.\n",
+                       enabled=True)
+                   rerun=True
+
+            if not rerun:
+                print(
+                    f"edf_collate: Warning: Logicol Matrix already found in {out}, and data in {root} doesn't appear to have changed, so you will not need to run this program again.\n"
+                    #f"edf_collate: Parameter forced=False, so the Logicol Matrix will not be re-generated. If you need to re-generate the Logicol Matrix, re-run edf_collate with forced=True."
+                    , enabled=True)
+                return
         else:
             print(f"edf_collate: Warning: Logicol Matrix already found in {out}, but data in {root} appears to have changed, so this program will be run again.\n", enabled=True)
 
@@ -323,6 +340,7 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32):
             "startdate": str(edf_headers[logicol_mtx.iloc[0]["file"]]["startdate"]),
             "enddate": str(edf_headers[logicol_mtx.iloc[-1]["file"]]["startdate"]
                        + datetime.timedelta(seconds=edf_headers[logicol_mtx.iloc[-1]["file"]]["Duration"])),
+            "params": params_object,
         }
         json.dump(details, details_file)
 
