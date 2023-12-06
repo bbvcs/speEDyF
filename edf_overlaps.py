@@ -463,7 +463,11 @@ def resolve(root, out):
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_A:
 
-                raise NotImplementedError(f"Data is the same, type is {OverlapType.ENTIRETY_FILE_A}, files: {overlap['file_A']}, {overlap['file_B']}")
+                # same data occurs at same time in a and b, but there is more data in b besides the overlapping section, so remove a.
+                logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=file_a_logicol.index.item())
+                single_excluded_channel(out, file_a_logicol,
+                                        f"REMOVED: Overlaps entirely (and data is the same) with {file_b_logicol.index.item()}, but there is data in the other channel besides the overlapping section, so this channel was removed.")
+
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_B:
 
@@ -564,7 +568,44 @@ def resolve(root, out):
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_A:
 
-                raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.ENTIRETY_FILE_A}, files: {overlap['file_A']}, {overlap['file_B']}")
+                if (file_b_50hz_proportion > powerline_proportion_threshold) \
+                        or (file_b_60hz_proportion > powerline_proportion_threshold):
+                    # channel in file B looks to be mostly powerline noise.
+                    # file A starts/ends within file B, so trim out the overlapping section from file B, leaving bits on
+                    # both sides.
+
+                    j = file_b_logicol.copy()
+
+                    # trim current entry up to the point that the overlap starts
+                    logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_end"] = file_a_logicol[
+                        "collated_start"].item()
+
+                    # add a new entry for this channel, starting at the where overlap ends
+                    j["collated_start"] = file_a_logicol["collated_end"].item()
+                    logicol_mtx_trimmed.loc[file_b_logicol.index.item() + 0.5] = j.values[0]
+                    logicol_mtx_trimmed = logicol_mtx_trimmed.sort_index()
+
+                    single_excluded_channel(out, file_b_logicol,
+                                            f"TRIMMED: {file_a_logicol.index.item()} overlaps entirely with this channel, but not vice-versa."
+                                            f"Data is not the same. The overlapping section of this channel appears to only electrical powerline noise, so was trimmed-out.")
+
+
+                elif (file_a_50hz_proportion > powerline_proportion_threshold) \
+                        or (file_a_60hz_proportion > powerline_proportion_threshold):
+                    # channel in file A looks to be mostly powerline noise.
+                    # file A starts/ends within file B, so can discard, and keep overlapping section from file B.
+                    logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=file_a_logicol.index.item())
+                    single_excluded_channel(out, file_a_logicol,
+                                            f"REMOVED: Overlaps entirely (but not vice-versa, and data is not the same!) with {file_b_logicol.index.item()}, and this appears to only electrical powerline noise, so was removed. ")
+                else:
+                    # both data appear to be valid...
+
+                    # different data occurs at same time in a and b, but there is more data in b besides the overlapping section, so remove a.
+                    # TODO not a perfect solution.
+                    logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=file_a_logicol.index.item())
+                    single_excluded_channel(out, file_a_logicol,
+                                            f"REMOVED: Overlaps entirely (data is not the same!) with {file_b_logicol.index.item()}, but there is data in the other channel besides the overlapping section, so this channel was removed and the other kept.")
+
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_B:
 
