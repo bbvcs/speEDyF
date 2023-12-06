@@ -441,15 +441,23 @@ def resolve(root, out):
         file_b.close()
 
         if file_a_sample_rate != file_b_sample_rate:
-            # see edf_segment for how to fix this. Leaving it for now so we get some test data.
-            raise NotImplementedError(f"Data has differing sample rates: A={file_a_sample_rate}Hz, B={file_b_sample_rate}Hz")
+            # raise NotImplementedError(f"Data has differing sample rates: A={file_a_sample_rate}Hz, B={file_b_sample_rate}Hz")
+            # we could deal with this here, but instead use it as additional check when: data isn't the same (which it
+            # never will be if sample rates are different, the equality check should always fail) and the powerline
+            # checking doesn't yield any additional information. I.e, if both seem like valid data, opt for the one
+            # with a greater sample rate.
+                # EXCEPT for entirety file A or B - still think we should keep the longer.
+                    # so only do if the overlap is part of both files (to decide which to trim)
+                    # or if overlap comprises entirety of both files.
+            pass
+
 
         # is overlapping data the same?
         # TODO what about sample rates?
             # surely if differing sample rate, data wont be the same.
             # keep data of higher sample rate?
 
-        if all(file_a_overlap_data == file_b_overlap_data):
+        if (file_a_sample_rate == file_b_sample_rate) and all(file_a_overlap_data == file_b_overlap_data):
 
             if overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_A:
                 
@@ -539,7 +547,28 @@ def resolve(root, out):
 
                 else:
 
-                    # keep the longest channel. TODO Not sure this is best solution but will do for now.
+                    # first try to keep the channel with greater sample rate
+                    if file_a_sample_rate != file_b_sample_rate:
+                        if file_a_sample_rate > file_b_sample_rate:
+                            # trim the overlapping data from the start of the channel in file B
+                            logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_start"] = file_a_logicol[
+                                "collated_end"].item()
+                            single_excluded_channel(out, file_b_logicol,
+                                                    f"TRIMMED: Overlaps partially with {file_a_logicol.index.item()}. "
+                                                    f"Data is not the same. Other channel has greater sample rate, so overlapping section from end of this channel trimmed.")
+
+                        else:
+                            # trim the overlapping data from the end of the channel in file A
+                            logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_b_logicol[
+                                "collated_start"].item()
+                            single_excluded_channel(out, file_a_logicol,
+                                                    f"TRIMMED: Overlaps partially with {file_b_logicol.index.item()}. "
+                                                    f"Data is not the same. Other channel greater sample rate, so overlapping section from end of this channel trimmed.")
+
+
+
+                    # TODO Not sure this is best solution but will do for now.
+                    # keep the longest channel
                     # known subjects where this occurs: 1006 (defo not best solution here)
                     # need to check excluded channels mtx to determine other channels where this happens
 
@@ -598,7 +627,6 @@ def resolve(root, out):
                     single_excluded_channel(out, file_a_logicol,
                                             f"REMOVED: Overlaps entirely (but not vice-versa, and data is not the same!) with {file_b_logicol.index.item()}, and this appears to only electrical powerline noise, so was removed. ")
                 else:
-                    # both data appear to be valid...
 
                     # different data occurs at same time in a and b, but there is more data in b besides the overlapping section, so remove a.
                     # TODO not a perfect solution.
@@ -667,6 +695,20 @@ def resolve(root, out):
                                             f"REMOVED: Overlaps entirely (and data is not the same!) with {file_a_logicol.index.item()}, and this appears to only electrical powerline noise, so was removed. ")
 
                 else:
+
+                    # try to keep the channel with greater sample rate
+                    if file_a_sample_rate != file_b_sample_rate:
+                        if file_a_sample_rate > file_b_sample_rate:
+                            # channel in file A is of lower sample rate, so remove.
+                            logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=file_b_logicol.index.item())
+                            single_excluded_channel(out, file_b_logicol,
+                                                    f"REMOVED: Overlaps entirely (and data is not the same!) with {file_a_logicol.index.item()} - sample rate is lower here, so removed. ")
+
+                        else:
+                            # channel in file A is of lower sample rate, so remove.
+                            logicol_mtx_trimmed = logicol_mtx_trimmed.drop(index=file_a_logicol.index.item())
+                            single_excluded_channel(out, file_a_logicol,
+                                                    f"REMOVED: Overlaps entirely (and data is not the same!) with {file_b_logicol.index.item()} - sample rate is lower here, so removed. ")
 
                     # remove both channels
                     #logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_end"] = file_a_logicol["collated_start"].item()
