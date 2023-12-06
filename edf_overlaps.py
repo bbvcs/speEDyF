@@ -402,9 +402,12 @@ def resolve(root, out):
 
             raise NotImplementedError(f"Reading overlapping data, type is {OverlapType.PARTIAL_BOTH_ENDOF_B}, files: {overlap['file_A']}, {overlap['file_B']}")
 
-        elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_A: # maybe impossible?
+        elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_A:
+            # empirically, only possible if start of file A has been trimmed as it overlapped with the end of another
+            # file, such that it now starts AFTER file B ?
 
-            raise NotImplementedError(f"Reading overlapping data, type is {OverlapType.ENTIRETY_FILE_A}, files: {overlap['file_A']}, {overlap['file_B']}")
+            file_a_overlap_start = 0
+            file_b_overlap_start = file_a_collated_start - file_b_collated_start
 
         elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_B:
 
