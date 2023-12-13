@@ -400,7 +400,8 @@ def resolve(root, out):
 
         elif overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_B: # maybe impossible?
 
-            raise NotImplementedError(f"Reading overlapping data, type is {OverlapType.PARTIAL_BOTH_ENDOF_B}, files: {overlap['file_A']}, {overlap['file_B']}")
+            file_a_overlap_start = 0
+            file_b_overlap_start = file_a_collated_start - file_b_collated_start
 
         elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_A:
             # empirically, only possible if start of file A has been trimmed as it overlapped with the end of another
@@ -467,7 +468,12 @@ def resolve(root, out):
 
             elif overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_B:
 
-                raise NotImplementedError(f"Data is the same, type is {OverlapType.PARTIAL_BOTH_ENDOF_B}, files: {overlap['file_A']}, {overlap['file_B']}")
+                # trim the overlapping data from the end of the channel in file B
+                logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_end"] = file_a_logicol[
+                    "collated_start"].item()
+                single_excluded_channel(out, file_a_logicol,
+                                        f"TRIMMED: Overlaps partially with {file_a_logicol.index.item()}, but data is the same; identical section trimmed from end of this channel.")
+
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_A:
 
@@ -592,8 +598,66 @@ def resolve(root, out):
 
 
             elif overlap["overlap_type"] is OverlapType.PARTIAL_BOTH_ENDOF_B:
+                # THIS IS JUST COPIED FROM ABOVE, BUT A AND B FLIPPED
 
-                raise NotImplementedError(f"Data is NOT the same, type is {OverlapType.PARTIAL_BOTH_ENDOF_B}, files: {overlap['file_A']}, {overlap['file_B']}")
+                if (file_b_50hz_proportion > powerline_proportion_threshold) \
+                        or (file_b_60hz_proportion > powerline_proportion_threshold):
+
+                    # overlapping section of channel in file B looks to be mostly powerline noise - trim it
+                    logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_end"] \
+                        = file_a_logicol["collated_start"].item()
+                    single_excluded_channel(out, file_b_logicol,
+                                            f"TRIMMED: Overlaps partially with {file_a_logicol.index.item()}, and data is not the same; this appears to be only electrical powerline noise, so overlapping section trimmed from this channel.")
+
+                elif (file_a_50hz_proportion > powerline_proportion_threshold) \
+                        or (file_a_60hz_proportion > powerline_proportion_threshold):
+
+                    # overlapping section of channel in file A looks to be mostly powerline noise - trim it
+                    logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_start"] \
+                        = file_b_logicol["collated_end"].item()
+                    single_excluded_channel(out, file_b_logicol,
+                                            f"TRIMMED: Overlaps partially with {file_b_logicol.index.item()}, and data is not the same; this appears to be only electrical powerline noise, so overlapping section trimmed from this channel.")
+
+
+                else:
+
+                    # first try to keep the channel with greater sample rate
+                    if file_b_sample_rate != file_a_sample_rate:
+                        if file_b_sample_rate > file_a_sample_rate:
+                            # trim the overlapping data from the start of the channel in file A
+                            logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_start"] = file_b_logicol[
+                                "collated_end"].item()
+                            single_excluded_channel(out, file_a_logicol,
+                                                    f"TRIMMED: Overlaps partially with {file_b_logicol.index.item()}. "
+                                                    f"Data is not the same. Other channel has greater sample rate, so overlapping section from end of this channel trimmed.")
+
+                        else:
+                            # trim the overlapping data from the end of the channel in file B
+                            logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_end"] = file_a_logicol[
+                                "collated_start"].item()
+                            single_excluded_channel(out, file_b_logicol,
+                                                    f"TRIMMED: Overlaps partially with {file_a_logicol.index.item()}. "
+                                                    f"Data is not the same. Other channel greater sample rate, so overlapping section from end of this channel trimmed.")
+
+
+                    file_b_duration = file_b_logicol["channel_duration"].item()
+                    file_a_duration = file_a_logicol["channel_duration"].item()
+
+                    if file_b_duration > file_a_duration:
+                        # trim the overlapping data from the start of the channel in file A
+                        logicol_mtx_trimmed.at[file_a_logicol.index.item(), "collated_start"] = file_b_logicol[
+                            "collated_end"].item()
+                        single_excluded_channel(out, file_a_logicol,
+                                                f"TRIMMED: Overlaps partially with {file_b_logicol.index.item()}. "
+                                                f"Data is not the same. Other channel is longer, so overlapping section from end of this channel trimmed.")
+
+                    else:
+                        # trim the overlapping data from the end of the channel in file B
+                        logicol_mtx_trimmed.at[file_b_logicol.index.item(), "collated_end"] = file_a_logicol[
+                            "collated_start"].item()
+                        single_excluded_channel(out, file_b_logicol,
+                                                f"TRIMMED: Overlaps partially with {file_a_logicol.index.item()}. "
+                                                f"Data is not the same. Other channel is longer, so overlapping section from end of this channel trimmed.")
 
             elif overlap["overlap_type"] is OverlapType.ENTIRETY_FILE_A:
 
