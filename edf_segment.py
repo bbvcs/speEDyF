@@ -155,6 +155,31 @@ class EDFSegmenter:
         """Get list of channels present in the collation, of which each segment will have a row for by default."""
         return self.__available_channels
 
+    def get_available_channels_sample_rates(self):
+        """Get the sample rates of channels present in the collation.
+        WARNING: If channels in a segment do not have the same sample rate, all will be downsampled to the minimum.
+        This method can be used to inform how to group channels and produce separate segments, to work around this limitation.
+
+        Returns:
+            - channel_sample_rates_across_files: Sample Rate for each channel in each file
+            - channel_sample_rates: A summary of the different sample rates present across all files for each channel.
+        """
+
+        channel_sample_rates = {}
+        channel_sample_rates_across_files = self.logicol_mtx[["file", "channel", "channel_sample_rate"]]
+        for channel in pd.unique(channel_sample_rates_across_files["channel"]):
+            sample_rates = channel_sample_rates_across_files[channel_sample_rates_across_files["channel"] == channel]
+            sample_rates = pd.unique(sample_rates["channel_sample_rate"])
+
+            if len(sample_rates) > 1:
+                # the code can handle this but just want to flag up
+                print(f"Bittium EDF channel {channel} has different sample rates through recording: {sample_rates}",
+                      enabled=True)
+
+            channel_sample_rates[channel] = sample_rates[0]
+
+        return channel_sample_rates_across_files, channel_sample_rates
+
     def get_used_channels(self):
         """Get the channels present in segments produced by the segmenter - either all available, or a subset."""
         return self.use_channels
@@ -174,8 +199,8 @@ class EDFSegmenter:
             if isinstance(use_channels, list):
                 self.use_channels = [ch for ch in use_channels if ch in self.__available_channels]
 
-    def get_startdate(self):
-        return self.__startdate
+    def get_start_end_dates(self):
+        return self.__startdate, self.__enddate
 
     def get_segment_onsets(self, as_datetime=True):
         if not as_datetime:
@@ -269,7 +294,8 @@ class EDFSegmenter:
 
         # find any channels in logicol mtx that overlap in time with our segment (i.e; channels we will use for segment)
         segment_channels = self.logicol_mtx.query(
-            "(@segment_collated_end > collated_start) and (collated_end > @segment_collated_start)")
+            "(@segment_collated_end > collated_start) and (collated_end > @segment_collated_start) "
+            "and (channel in @self.use_channels)")
 
         # decide upon a sample rate for this segment, by looking at the channel data we are extracting
         segment_channels_sample_rates = pd.unique(segment_channels["channel_sample_rate"])
