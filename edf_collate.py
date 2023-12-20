@@ -13,30 +13,43 @@ import pyedflib
 from .utils.custom_print import print
 from .utils import constants
 
-def get_edf_files(root):
+
+def get_edf_files_local_paths(root):
     """ Get all EDF-like files under a root directory """
     edf_files = []
     for path, subdirs, files in os.walk(root):
         for file in files:
             if file.split(".")[-1].lower() in ["edf", "edf+", "bdf", "bdf+"]:
-                edf_files.append(os.path.join(path, file))
+                #edf_files.append(os.path.join(path, file))
+                file_dir_relative_to_root = path.split(root)[1]
+                edf_files.append(os.path.join(file_dir_relative_to_root, file))
 
     return edf_files
+
+def get_edf_file_abs_path(root, file_path_relative_to_root):
+    return f"{root}{file_path_relative_to_root}"
+
+def get_edf_files_abs_paths(root, edf_files):
+
+    abs_paths = []
+    for file in edf_files:
+        abs_paths.append(get_edf_file_abs_path(root, file))
+    return abs_paths
 
 def hash_edfs_under_root(root):
     """ Produce a hash using the EDF files under a root directory. This can be used to see if edf_collate needs to be
         re-run. """
-    edf_files = get_edf_files(root)
+    edf_files = get_edf_files_abs_paths(root, get_edf_files_local_paths(root))
 
     sha = hashlib.sha1()
     for file in edf_files:
-        sha.update(bytes(file, encoding="utf-8"))  # the file's path and name
+        sha.update(bytes(file.split(root)[1], encoding="utf-8"))  # the file's path and name
         sha.update(bytes(str(os.stat(file).st_size), encoding="utf-8"))  # the file's size in bytes
         sha.update(bytes(str(os.stat(file).st_mtime), encoding="utf-8"))  # the file's last modified time
 
     return sha.hexdigest()
 
-def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32):
+def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32, force_rerun=False):
     """ Produce a matrix representation of a chronologically ordered collection of EDF files.
 
     Given a root directory, find all EDF files present in the directory and any subdirectories.
@@ -91,7 +104,7 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32):
 
         if current_hash == previous_hash:
 
-            rerun = False
+            rerun = False or force_rerun
 
             if isinstance(previous_params, dict):
                if previous_params != params_object:
@@ -109,23 +122,26 @@ def edf_collate(root, out, minimum_edf_channel_sample_rate_hz=32):
         else:
             print(f"edf_collate: Warning: Logicol Matrix already found in {out}, but data in {root} appears to have changed, so this program will be run again.\n", enabled=True)
 
-    except (FileNotFoundError, KeyError):
+    except (FileNotFoundError, KeyError, json.decoder.JSONDecodeError):
         pass
 
 
     unreadable_files = []
 
     # collect edf files under root directory
-    edf_files = get_edf_files(root)
+    edf_files = get_edf_files_local_paths(root)
 
     # read headers and store in dict of filepath -> header
     edf_headers = {}
-    for file in edf_files:
+    for file_abs_path in get_edf_files_abs_paths(root, edf_files):
+
+        file_path_relative_to_root = file_abs_path.split(root)[1]
+
         try:
-            edf_headers[file] = pyedflib.highlevel.read_edf_header(file, read_annotations=False)
+            edf_headers[file_path_relative_to_root] = pyedflib.highlevel.read_edf_header(file_abs_path, read_annotations=False)
         except OSError as e:
-            print(f"edf_collate: Could not read {file} ({e}), so removing from further processing.", enabled=constants.VERBOSE)
-            unreadable_files.append(file)
+            print(f"edf_collate: Could not read {file_abs_path} ({e}), so removing from further processing.", enabled=constants.VERBOSE)
+            unreadable_files.append(file_path_relative_to_root)
 
     # remove any files that we couldn't read
     for file in unreadable_files:

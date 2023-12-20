@@ -12,6 +12,7 @@ from scipy import signal
 
 import pyedflib
 
+from .edf_collate import get_edf_file_abs_path
 from .utils import constants
 from .utils.custom_print import print
 
@@ -150,7 +151,7 @@ def interval_plot(interval_list):
 
 
 
-def check(root, out, mtx=None, verbose=constants.VERBOSE):
+def check(out, mtx=None, verbose=constants.VERBOSE):
 
     print("edf_overlaps.check: Checking for overlaps (this may take a while on larger datasets) ... ", enabled=verbose)
 
@@ -182,9 +183,20 @@ def check(root, out, mtx=None, verbose=constants.VERBOSE):
     else:
 
         try:
-            logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME),
+            logicol_mtx_trimmed = pd.read_csv(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME),
                                       index_col="index")
-            print("edf_overlaps.check: Overlap-trimmed Logicol Matrix found and successfully loaded", enabled=verbose)
+
+            logicol_mtx_mtime = os.stat(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME)).st_mtime
+            logicol_mtx_trimmed_mtime = os.stat(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME)).st_mtime
+
+            # was non-trimmed logicol_mtx made more recently than the trimmed mtx? (has the program been re-ran and not overlap checked)
+            if logicol_mtx_mtime > logicol_mtx_trimmed_mtime:
+                logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME),
+                                          index_col="index")
+            else: # if trimmed is more recent, then overlaps have been resolved.
+                print("edf_overlaps.check: Overlap-trimmed Logicol Matrix found and successfully loaded", enabled=verbose)
+                logicol_mtx = logicol_mtx_trimmed
+
 
         except FileNotFoundError:
 
@@ -285,14 +297,23 @@ def resolve(root, out):
     try:
         logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME),
                                        index_col="index")
-        print(
-            f"edf_overlaps.resolve: Warning: Overlap-trimmed Logicol Matrix already found in {out} - it is unlikely you need to re-run this program again.\n"
-            f"edf_overlaps.resolve: Continue anyway (re-generate trimmed Logicol Matrix)? (y/n)", enabled=True)
-        if str(input("> ")).lower() == "y":
+
+        logicol_mtx_mtime = os.stat(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME)).st_mtime
+        logicol_mtx_trimmed_mtime = os.stat(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME)).st_mtime
+
+        # was non-trimmed logicol_mtx made more recently than the trimmed mtx? (has the program been re-ran and not overlap checked)
+        if logicol_mtx_mtime > logicol_mtx_trimmed_mtime:
             logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME),
                                       index_col="index")
         else:
-            return
+            print(
+                f"edf_overlaps.resolve: Warning: Overlap-trimmed Logicol Matrix already found in {out} - it is unlikely you need to re-run this program again.\n"
+                f"edf_overlaps.resolve: Continue anyway (re-generate trimmed Logicol Matrix)? (y/n)", enabled=True)
+            if str(input("> ")).lower() == "y":
+                logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME),
+                                          index_col="index")
+            else:
+                return
 
     except FileNotFoundError:
 
@@ -306,7 +327,7 @@ def resolve(root, out):
 
 
     # first, check if we actually have any overlaps to resolve
-    overlaps = check(root, out, mtx=logicol_mtx, verbose=False)
+    overlaps = check(out, mtx=logicol_mtx, verbose=False)
 
     if len(overlaps) == 0:
         print("edf_overlaps.resolve: No overlaps found to be present, no further action will be taken.", enabled=constants.VERBOSE)
@@ -341,8 +362,8 @@ def resolve(root, out):
             with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "r") as details_file:
                 details = json.load(details_file)
 
-            start_header = pyedflib.highlevel.read_edf_header(logicol_mtx_trimmed.iloc[0]["file"], read_annotations=False)
-            end_header = pyedflib.highlevel.read_edf_header(logicol_mtx_trimmed.iloc[-1]["file"], read_annotations=False)
+            start_header = pyedflib.highlevel.read_edf_header(get_edf_file_abs_path(root, logicol_mtx_trimmed.iloc[0]["file"]), read_annotations=False)
+            end_header = pyedflib.highlevel.read_edf_header(get_edf_file_abs_path(root, logicol_mtx_trimmed.iloc[-1]["file"]), read_annotations=False)
 
             startdate = str(start_header["startdate"])
             enddate = str(end_header["startdate"] + datetime.timedelta(seconds=end_header["Duration"]))
@@ -384,8 +405,8 @@ def resolve(root, out):
         overlap_duration = overlap["overlap_duration"]
 
         # open handles to access file data
-        file_a = pyedflib.EdfReader(overlap["file_A"], 0, 1)
-        file_b = pyedflib.EdfReader(overlap["file_B"], 0, 1)
+        file_a = pyedflib.EdfReader(get_edf_file_abs_path(root, overlap["file_A"]), 0, 1)
+        file_b = pyedflib.EdfReader(get_edf_file_abs_path(root, overlap["file_B"]), 0, 1)
 
         # read the overlapping data from both files
         # i.e, where does the overlap start/end within each file (in seconds, w.r.t start of each file (0))
@@ -796,7 +817,7 @@ def resolve(root, out):
 
 
         # we've fixed an overlap, so re-generate
-        overlaps = check(root, out, mtx=logicol_mtx_trimmed, verbose=False)
+        overlaps = check(out, mtx=logicol_mtx_trimmed, verbose=False)
 
     # save trimmed logicol_mtx to csv
     logicol_mtx_trimmed.to_csv(os.path.join(out, constants.LOGICOL_POST_OVERLAP_RESOLVE_FILENAME), index_label="index")

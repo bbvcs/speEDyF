@@ -12,6 +12,7 @@ from scipy import signal
 
 import pyedflib
 
+from .edf_collate import get_edf_file_abs_path
 from .edf_overlaps import check
 from .utils.custom_print import print
 from .utils import constants
@@ -79,7 +80,7 @@ class EDFSegment:
 
 class EDFSegmenter:
 
-    def __init__(self, root: str, out: str, segment_len_s: int = 300, use_channels="all", cache_lifetime: int = 10):
+    def __init__(self, out: str, segment_len_s: int = 300, use_channels="all", cache_lifetime: int = 10):
         """ ...
 
 
@@ -87,7 +88,6 @@ class EDFSegmenter:
 
         """
 
-        self.root = root
         self.out = out
         self.segment_len_s = segment_len_s
 
@@ -103,7 +103,7 @@ class EDFSegmenter:
 
         except FileNotFoundError:
             print("edf_segment: Could not find overlap-trimmed Logicol Matrix, checking if overlaps present in untrimmed Logicol Matrix ...", enabled=True)
-            if len(check(root, out, verbose=False)) > 0:
+            if len(check(out, verbose=False)) > 0:
                 print(f"edf_segment: Warning: Trimmed Logicol Matrix could not be found in {out}, and it appears there are overlaps in your data.\n"
                       f"edf_segment: It is highly recommended that you run edf_overlaps.resolve(), to resolve these overlaps.\n"
                       f"edf_segment: Continue anyway with overlaps present? (y/n)", enabled=True)
@@ -122,6 +122,7 @@ class EDFSegmenter:
 
         with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "r") as details_file:
             details = json.load(details_file)
+            self._root = details["root"]
             self.__available_channels = details["channels_superset"]
             self.__startdate = datetime.datetime.strptime(details["startdate"], '%Y-%m-%d %H:%M:%S')
             self.__enddate = datetime.datetime.strptime(details["enddate"], '%Y-%m-%d %H:%M:%S')
@@ -329,7 +330,7 @@ class EDFSegmenter:
                        segment_channels["channel_duration"], segment_channels["channel_sample_rate"]):
 
             # get whole channel data
-            with pyedflib.EdfReader(file) as edf_file:
+            with pyedflib.EdfReader(get_edf_file_abs_path(self._root, file)) as edf_file:
 
                 # skip this channel if it isn't in specified list
                 if channel_label not in self.use_channels:
@@ -455,6 +456,43 @@ class EDFSegmenter:
         self.clear_cache()
 
         return segments
+
+
+    def whole_recording(self, output_dir, dtype=np.float16, read=True, verbose=False):
+
+        # TODO should advise not excluding any channels before running
+        # error if use channels != available channels
+
+        if len(pd.unique(self.logicol_mtx["channel_sample_rate"])) > 1:
+            raise NotImplementedError
+        else:
+            fs = pd.unique(self.logicol_mtx["channel_sample_rate"])[0]
+            channel_length = (fs * self.segment_len_s) * self.get_max_segment_count()
+            channel_length = np.ceil(channel_length).astype(np.int64)
+
+        path = os.path.join(output_dir, "whole_recording.dat")
+
+        if read:
+            return np.memmap(path, mode="r", shape=(len(self.get_available_channels()), channel_length), dtype=dtype)
+
+        else:  # write
+            for i in range(0, self.get_max_segment_count()):
+
+                if verbose: print(f"edf_segment.whole_recording: {i}/{self.get_max_segment_count()}", enabled=True)
+
+                segment = self.get_segment(idx=i).data_as_numpy()
+
+                start = (i * fs * self.segment_len_s).astype(np.int64)
+                #end = ((i+1) * fs * self.segment_len_s).astype(np.int64)
+                end = start + segment.shape[1]
+
+                if i == 0:
+                    whole_recording_buffer = np.memmap(path, mode="w+", shape=(segment.shape[0], channel_length), dtype=dtype)
+                    whole_recording_buffer[:, :] = np.NaN
+
+                whole_recording_buffer[:, start:end] = segment
+
+
 
     def __iter__(self):
         return self
