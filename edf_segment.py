@@ -80,7 +80,7 @@ class EDFSegment:
 
 class EDFSegmenter:
 
-    def __init__(self, out: str, segment_len_s: int = 300, use_channels="all", cache_lifetime: int = 10):
+    def __init__(self, out: str, segment_len_s: int = 300, new_root = None, use_channels="all", cache_lifetime: int = 10):
         """ ...
 
 
@@ -122,10 +122,20 @@ class EDFSegmenter:
 
         with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "r") as details_file:
             details = json.load(details_file)
-            self._root = details["root"]
+
+            if not new_root:
+                self._root = details["root"]
+            else:
+                self._root = new_root
+
             self.__available_channels = details["channels_superset"]
             self.__startdate = datetime.datetime.strptime(details["startdate"], '%Y-%m-%d %H:%M:%S')
             self.__enddate = datetime.datetime.strptime(details["enddate"], '%Y-%m-%d %H:%M:%S')
+
+        if new_root:
+            with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "w") as details_file:
+                details["root"] = new_root
+                json.dump(details, details_file)
 
         if use_channels != "all" and (not isinstance(use_channels, list) or any([type(ch) != str for ch in use_channels])):
             raise TypeError("edf_segment: Please ensure 'use_channels' is either 'all' or a list of strings.")
@@ -134,6 +144,7 @@ class EDFSegmenter:
         else:
             if isinstance(use_channels, list):
                 self.use_channels = [ch for ch in use_channels if ch in self.__available_channels]
+
 
 
         #logicol_start_s = self.logicol_mtx["collated_start"].iloc[0]

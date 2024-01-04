@@ -10,8 +10,8 @@ if __name__ == "__main__":
 
     start = time.time()
 
-    subject = "1379_ECGEKG"
-    root = f"/home/bcsm/University/stage-4/MSc_Project/UCLH/{subject}"
+    subject = "subject1"
+    root = f"/home/bcsm/University/stage-4/MSc_Project/????/{subject}"
     out = f"out/{subject}"
 
     # produce collation matrix (saved as .csv to out)
@@ -22,7 +22,7 @@ if __name__ == "__main__":
         edf_overlaps.resolve(root, out) # fix them if so (trim matrix) (can take a while)
 
     # set up segmenter object, to break data into 5 min segments
-    segmenter = edf_segment.EDFSegmenter(root, out, segment_len_s=300)
+    segmenter = edf_segment.EDFSegmenter(out, segment_len_s=300)
 
     # maybe we want to use only EEG channels
     segmenter.set_used_channels([ch for ch in segmenter.get_available_channels() if ch != "ECG"])
