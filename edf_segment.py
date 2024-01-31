@@ -192,6 +192,13 @@ class EDFSegmenter:
 
         return channel_sample_rates_across_files, channel_sample_rates
 
+    def get_grouped_available_channels_sample_rates(self):
+        # Returns a dataframe with format sample rate -> list of channels with that sample_rate
+
+        return self.get_available_channels_sample_rates()[0] \
+                    .groupby("channel_sample_rate")["channel"] \
+                    .apply(lambda x: list(set(x))).reset_index()
+
     def get_used_channels(self):
         """Get the channels present in segments produced by the segmenter - either all available, or a subset."""
         return self.use_channels
@@ -469,22 +476,31 @@ class EDFSegmenter:
         return segments
 
 
-    def whole_recording(self, output_dir, dtype=np.float16, read=True, verbose=False):
+    def whole_recording(self, output_dir, dtype=np.float16, regenerate=False, verbose=False):
 
-        # TODO should advise not excluding any channels before running
-        # error if use channels != available channels
 
-        if len(pd.unique(self.logicol_mtx["channel_sample_rate"])) > 1:
-            raise NotImplementedError
+
+        channel_sample_rates = pd.unique(self.logicol_mtx.loc[self.logicol_mtx["channel"].isin(self.use_channels)]["channel_sample_rate"])
+
+        if len(channel_sample_rates) > 1:
+            raise NotImplementedError("Cannot get whole recording when sample rates of channels differ. Please use set_used_channels() so that only channels of the same sample rate are selected before calling this function. "
+                                      "You can use get_available_channels_sample_rates() (or get_grouped_available_channels_sample_rates()) to quickly check which channels share the same sample rate.")
         else:
-            fs = pd.unique(self.logicol_mtx["channel_sample_rate"])[0]
+            #fs = pd.unique(self.logicol_mtx["channel_sample_rate"])[0]
+            fs = channel_sample_rates[0]
             channel_length = (fs * self.segment_len_s) * self.get_max_segment_count()
             channel_length = np.ceil(channel_length).astype(np.int64)
 
-        path = os.path.join(output_dir, "whole_recording.dat")
+        path = os.path.join(output_dir, f"whole_recording_{fs}Hz_channels.dat")
 
-        if read:
-            return np.memmap(path, mode="r", shape=(len(self.get_available_channels()), channel_length), dtype=dtype)
+        #delta = self.__enddate - self.__startdate
+        #delta_s = (delta.days * 24 * 60 * 60) + delta.seconds
+        #timevec =np.arange(self.__startdate, self.__enddate, 250) # TODO, not this, huge!
+        metadata = (self.__startdate, self.__enddate, fs)
+
+
+        if os.path.exists(path) and regenerate == False:
+            return np.memmap(path, mode="r", shape=(len(self.get_used_channels()), channel_length), dtype=dtype), metadata
 
         else:  # write
             for i in range(0, self.get_max_segment_count()):
@@ -502,6 +518,8 @@ class EDFSegmenter:
                     whole_recording_buffer[:, :] = np.NaN
 
                 whole_recording_buffer[:, start:end] = segment
+
+            return whole_recording_buffer, metadata
 
 
 
