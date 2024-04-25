@@ -112,13 +112,13 @@ class EDFSegmenter:
             else:
                 print("edf_segment: No overlaps present! Loading Logicol Matrix ...", enabled=True)
 
-                try:
-                    self.logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME),
-                                                   index_col="index")
+            try:
+                self.logicol_mtx = pd.read_csv(os.path.join(out, constants.LOGICOL_PRE_OVERLAP_RESOLVE_FILENAME),
+                                                index_col="index")
 
-                except FileNotFoundError:
-                    print(f"edf_segment: Warning: Logicol Matrix could not be found in {out} - have you run edf_collate? Exiting.", enabled=True)
-                    sys.exit(os.EX_NOINPUT)
+            except FileNotFoundError:
+                print(f"edf_segment: Warning: Logicol Matrix could not be found in {out} - have you run edf_collate? Exiting.", enabled=True)
+                sys.exit(os.EX_NOINPUT)
 
         with open(os.path.join(out, constants.DETAILS_JSON_FILENAME), "r") as details_file:
             details = json.load(details_file)
