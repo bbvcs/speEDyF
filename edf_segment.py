@@ -491,16 +491,18 @@ class EDFSegmenter:
             channel_length = (fs * self.segment_len_s) * self.get_max_segment_count()
             channel_length = np.ceil(channel_length).astype(np.int64)
 
-        path = os.path.join(output_dir, f"whole_recording_{fs}Hz_channels.dat")
+        path = os.path.join(output_dir, f"whole_recording_{fs}Hz_channels")
 
         #delta = self.__enddate - self.__startdate
         #delta_s = (delta.days * 24 * 60 * 60) + delta.seconds
         #timevec =np.arange(self.__startdate, self.__enddate, 250) # TODO, not this, huge!
-        metadata = (self.__startdate, self.__enddate, fs)
-
+        #metadata = (self.__startdate, self.__enddate, fs)
+        metadata = {"start_date": self.__startdate.strftime("%d/%m/%y %H:%M:%S"),
+                    "end_date": self.__enddate.strftime("%d/%m/%y %H:%M:%S"),
+                    "fs_hz": fs}
 
         if os.path.exists(path) and regenerate == False:
-            return np.memmap(path, mode="r", shape=(len(self.get_used_channels()), channel_length), dtype=dtype), metadata
+            return np.memmap(f"{path}.dat", mode="r", shape=(len(self.get_used_channels()), channel_length), dtype=dtype), metadata
 
         else:  # write
             for i in range(0, self.get_max_segment_count()):
@@ -514,10 +516,17 @@ class EDFSegmenter:
                 end = start + segment.shape[1]
 
                 if i == 0:
-                    whole_recording_buffer = np.memmap(path, mode="w+", shape=(segment.shape[0], channel_length), dtype=dtype)
+                    whole_recording_buffer = np.memmap(f"{path}.dat", mode="w+", shape=(segment.shape[0], channel_length), dtype=dtype)
                     whole_recording_buffer[:, :] = np.NaN
 
                 whole_recording_buffer[:, start:end] = segment
+
+
+            # save to csv print("Saving to csv...")
+            pd.DataFrame(np.transpose(whole_recording_buffer), columns=self.use_channels).to_csv(f"{path}.csv")
+
+            with open(f"{path}_metadata.json", "w") as outfile:
+                json.dump(metadata, outfile)
 
             return whole_recording_buffer, metadata
 
